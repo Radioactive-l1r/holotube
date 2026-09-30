@@ -1,0 +1,169 @@
+:root {
+  --bg: #0f1115;
+  --card: #191c23;
+  --line: #2b303b;
+  --text: #e8eaed;
+  --muted: #9aa2b1;
+  --accent: #4c8dff;
+  --error: #ff6b6b;
+  --ok: #58d68d;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px 20px 64px;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header, .card {
+  max-width: 860px;
+  margin: 0 auto 20px;
+}
+
+h1 { margin: 0 0 8px; font-size: 1.4rem; }
+h2 { margin: 0 0 16px; font-size: 1.1rem; }
+h3 { margin: 0 0 8px; font-size: 0.95rem; color: var(--muted); }
+
+.card {
+  padding: 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.warn {
+  margin: 0;
+  padding: 12px 14px;
+  background: rgba(255, 179, 71, 0.08);
+  border: 1px solid rgba(255, 179, 71, 0.3);
+  border-radius: 8px;
+  color: #ffc46b;
+  font-size: 0.85rem;
+}
+
+.row { display: flex; align-items: center; gap: 8px; }
+.row h2 { margin: 0; }
+.spacer { flex: 1; }
+
+label {
+  display: block;
+  margin: 14px 0 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+input[type="text"], input[type="password"] {
+  width: 100%;
+  padding: 11px 12px;
+  background: #12151b;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+input:focus { outline: none; border-color: var(--accent); }
+input::placeholder { color: #5c6472; }
+
+button {
+  padding: 11px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { filter: brightness(1.1); }
+button:disabled { opacity: 0.6; cursor: default; }
+
+button.ghost {
+  padding: 7px 12px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+button.ghost:hover:not(:disabled) { background: #12151b; filter: none; color: var(--text); }
+button.small { padding: 5px 10px; font-size: 0.8rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+td:last-child { text-align: right; }
+
+td.free { color: var(--ok); }
+td.busy { color: #ffc46b; }
+
+.code {
+  padding: 2px 8px;
+  background: #12151b;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+
+@media (max-width: 720px) {
+  .split { grid-template-columns: 1fr; }
+}
+
+.qr {
+  display: flex;
+  justify-content: center;
+  padding: 14px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.qr svg { width: 100%; max-width: 260px; height: auto; }
+
+.digits { font-size: 0.9rem; color: var(--muted); }
+.digits code { color: var(--accent); font-size: 1rem; letter-spacing: 0.08em; }
+
+fieldset { margin: 16px 0; padding: 0; border: 0; }
+legend { padding: 0; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.option-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.option-row label { width: 14px; margin: 0; color: var(--muted); font-weight: 600; }
+.option-row input[type="text"] { flex: 1; }
+.option-row input[type="radio"] { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.error {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.35);
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 0.88rem;
+}
+
+.ok {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  background: rgba(88, 214, 141, 0.1);
+  border: 1px solid rgba(88, 214, 141, 0.3);
+  border-radius: 8px;
+  color: var(--ok);
+  font-size: 0.88rem;
+}
+
+.hint { margin: 6px 0 0; color: var(--muted); font-size: 0.8rem; }
+.muted { color: var(--muted); }
+a { color: var(--accent); }
+
+[hidden] { display: none !important; }

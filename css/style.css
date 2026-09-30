@@ -111,4 +111,73 @@ button.link {
 
 button.link:hover { color: var(--text); }
 
+/* The station view is the one screen that gets looked at from a distance, so
+   the station name is the largest type in the app. */
+.station-name {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.station-name::after {
+  content: " STATION";
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+}
+
+#station .sub { margin-bottom: 24px; }
+
+button.secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #12151b;
+  filter: none;
+}
+
+.status {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+/* The scanner injects its own video element and control strip, so this only
+   has to reserve a square for it. */
+.reader {
+  margin: 16px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #000;
+}
+
+.reader video { display: block; }
+
+#manual {
+  margin: 20px 0 0;
+  font-size: 0.88rem;
+}
+
+#manual summary {
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+#manual form { margin-top: 14px; }
+
+#manual input { margin-bottom: 12px; }
+
+#manual label { text-transform: none; letter-spacing: 0; }
+
+#station .link { margin-top: 16px; }
+
 [hidden] { display: none !important; }

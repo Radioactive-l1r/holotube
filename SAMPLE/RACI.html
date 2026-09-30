@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Station sample</title>
+
+<!--
+  ============================================================================
+  STATION SAMPLE -- reference implementation of the station API.
+  ============================================================================
+
+  This is a plain HTML file with no build step and no dependencies. Open it in a
+  browser, or drop it next to your Unity/Unreal web build and copy the logic
+  across. Every value it needs is hardcoded in the CONFIG block below.
+
+  It exists so there is one file that a game developer can read top to bottom
+  and see exactly what the API expects, in what order, and what each refusal
+  means.
+
+  ---------------------------------------------------------------------------
+  THE WHOLE FLOW, IN ONE DIAGRAM
+  ---------------------------------------------------------------------------
+
+      idle screen
+          |
+          |  [ Scan to play ]  <- a button on YOUR screen, not a printed poster
+          v
+      show the QR image, start polling every 3 SECONDS
+          |
+          |  GET /stations/{code}   ->  occupied: true
+          v
+      STOP polling. Show the question and the 4 options.
+          |
+          |  GET /stations/{code}/question   (answer key is NOT in this response)
+          v
+      player presses A / B / C / D  ->  YOUR screen submits it
+          |
+          |  POST /stations/{code}/answer  { "option": "A" }
+          v
+      server records it against whoever is sitting there, frees the seat,
+      and tells you who it was and whether they were right.
+
+      GO BACK TO IDLE IMMEDIATELY -- do not wait for a poll to notice.
+
+  ---------------------------------------------------------------------------
+  THE THREE POLICIES THIS FILE ENFORCES
+  ---------------------------------------------------------------------------
+
+  1. The poll runs ONLY while the QR is on screen and the seat is free. That is
+     the only time something can change without you knowing. Once someone is
+     seated, zero requests are made -- the answer POST already told you
+     everything.
+
+  2. The server never pushes, so a seat can expire while you are not looking.
+     If a player scans and then closes their phone without answering, their
+     browser heartbeat stops and the seat is released after
+     STATION_STALE_MINUTES. You find that out from occupied_at plus
+     stale_after_minutes in the poll response, and from a slow 30-second
+     backstop poll.
+
+  3. A seat is released by the SERVER, not by you. Do not send a release call
+     after answering. The only exception is a player pressing "Done" to leave
+     early, which IS a release -- see releaseSeat() below.
+
+  ---------------------------------------------------------------------------
+  ONE HARD-CODED VALUE YOU SHOULD NOT SHIP TO PLAYERS
+  ---------------------------------------------------------------------------
+
+  STATION_API_KEY is written into this file in plain text, because the point of
+  the sample is to have zero configuration. That means anyone who can view the
+  page source can read the key. It is the same situation as a key compiled into
+  a Unity binary, where it can be recovered with a decompiler -- this key stops
+  drive-by requests, it is not a security boundary. Keep the sample private.
+
+  ---------------------------------------------------------------------------
+  MAPPING TO UNITY / UNREAL
+  ---------------------------------------------------------------------------
+
+    JavaScript here              C# in Unity / C++ in Unreal
+    ---------------------------  --------------------------------------------
+    fetch()                      UnityWebRequest / FHttpModule
+    setInterval()                System.Timers.Timer / FTSTicker
+    await on a request           a coroutine, or a completed delegate/callback
+    the CONFIG block             an inspector-exposed ScriptableObject
+    button handlers              OnPointerDown / OnClicked delegates
+
+  Nothing here is browser-specific except fetch and the DOM. The state machine
+  below is the part worth copying.
+-->
+
+<style>
+  :root { --bg:#12151b; --card:#191c23; --line:#2b303b; --text:#e8eaed;
+          --muted:#9aa2b1; --accent:#4c8dff; --good:#58d68d; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 20px 60px; background:var(--bg); color:var(--text);
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:1.25rem; }
+  .sub { margin:0 0 20px; color:var(--muted); font-size:.85rem; }
+  .card { padding:20px; background:var(--card); border:1px solid var(--line);
+          border-radius:12px; margin-bottom:16px; }
+  .state { display:inline-block; padding:3px 10px; background:#12151b;
+           border:1px solid var(--line); border-radius:6px; color:var(--accent);
+           font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+  h2 { margin:0 0 14px; font-size:1rem; }
+  p { margin:8px 0 0; }
+  .qr { display:flex; justify-content:center; padding:12px; background:#fff;
+        border-radius:8px; }
+  .qr img { width:100%; max-width:300px; height:auto; display:block;
+            image-rendering:pixelated; }
+  button { padding:12px 18px; background:var(--accent); color:#fff; border:0;
+           border-radius:8px; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover:not(:disabled) { filter:brightness(1.1); }
+  button:disabled { opacity:.55; cursor:default; }
+  button.ghost { background:transparent; border:1px solid var(--line);
+                 color:var(--muted); font-weight:400; padding:8px 14px;
+                 font-size:.85rem; }
+  .opts { display:grid; gap:10px; margin-top:14px; }
+  .opts button { text-align:left; background:#12151b; border:1px solid var(--line);
+                 color:var(--text); font-weight:400; }
+  .opts button:hover:not(:disabled) { border-color:var(--accent); filter:none; }
+  .opts b { color:var(--accent); margin-right:10px; }
+  .log { font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; color:var(--muted);
+         background:#0d1015; border:1px solid var(--line); border-radius:8px;
+         padding:12px; max-height:220px; overflow:auto; white-space:pre-wrap; }
+  .good { color:var(--good); } .bad { color:var(--bad); }
+  .row { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+  .note { color:var(--muted); font-size:.82rem; }
+</style>
+</head>
+
+<body>
+<main>
+  <h1>Station sample</h1>
+  <p class="sub">Reference implementation &mdash; <span id="code-label"></span></p>
+
+  <!-- IDLE ------------------------------------------------------------- -->
+  <section class="card" id="view-idle">
+    <span class="state" id="state-idle">idle</span>
+    <h2>Waiting for a player</h2>
+    <p class="note">Show the QR only when someone is standing at the screen. Nobody
+      is polling right now, so this state costs nothing.</p>
+    <div class="row">
+      <button id="btn-show">Scan to play</button>
+    </div>
+  </section>
+
+  <!-- QR ---------------------------------------------------------------- -->
+  <section class="card" id="view-qr" hidden>
+    <span class="state" id="state-qr">waiting</span>
+    <h2>Scan this with your phone</h2>
+    <div class="qr">
+      <!-- Your QR image goes here, same folder. The filename is arbitrary:
+           change src to match whatever you call it. -->
+      <img id="qr-image" src="raci_qr.png" alt="Station QR code"
+           onerror="this.style.display='none';document.getElementById('qr-missing').hidden=false;">
+      <!-- Shown if the file is missing. A broken image icon on an event screen
+           reads as a broken station, so say what is wrong instead. -->
+      <p id="qr-missing" class="note" hidden>
+        QR image not found (raci_qr.png). Put it in this folder, or change the
+        <code>src</code> above.
+      </p>
+    </div>
+    <p class="note">Polling <code>GET /stations/<span class="code-in"></span></code>
+      every 3 seconds. Stops the moment the seat fills.</p>
+    <div class="row">
+      <button id="btn-hide" class="ghost">Hide QR</button>
+    </div>
+  </section>
+
+  <!-- QUESTION ---------------------------------------------------------- -->
+  <section class="card" id="view-question" hidden>
+    <span class="state" id="state-question">playing</span>
+    <h2 id="player-name"></h2>
+    <p id="question-text"></p>
+    <div class="opts" id="options"></div>
+    <div class="row">
+      <button id="btn-done" class="ghost">Done &mdash; release seat</button>
+    </div>
+  </section>
+
+  <!-- RESULT ------------------------------------------------------------ -->
+  <section class="card" id="view-result" hidden>
+    <span class="state" id="state-result">result</span>
+    <h2 id="result-text"></h2>
+    <p id="result-detail" class="note"></p>
+    <div class="row">
+      <button id="btn-again">Back to idle</button>
+    </div>
+  </section>
+
+  <!-- FAULT ------------------------------------------------------------- -->
+  <section class="card" id="view-fault" hidden>
+    <span class="state" id="state-fault">not configured</span>
+    <h2 id="fault-text"></h2>
+    <p id="fault-detail" class="note"></p>
+    <div class="row">
+      <button id="btn-retry">Retry</button>
+    </div>
+  </section>
+
+  <!-- LOG --------------------------------------------------------------- -->
+  <section class="card">
+    <h2>Request log</h2>
+    <p class="note">Every call the API sees, in order. This is the thing to check
+      first when something does not work.</p>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ===========================================================================
+   CONFIG -- every value this sample needs. Nothing else is configurable.
+   =========================================================================== */
+
+// The Lambda Function URL. Same URL for every station.
+const API_URL = "https://3wnjs7zlcveuthesh2fcnax4sm0lntav.lambda-url.us-east-1.on.aws";
+
+// THIS STATION'S CODE. Must be 1-20 characters of A-Z, 0-9, - or _.
+// Lower case is fine; the server upper-cases it.
+//
+// NOTE: the API rejects codes longer than 20 characters, so
+// "station_dbholotube_102078" (25) would 404 on every call. Shortened here.
+const STATION_CODE = "ETO3XUTSKNWNWC2M2KEV";
+
+// THIS STATION'S ACCESS TOKEN -- the digits encoded inside the QR image.
+// The player scans it and posts it to /stations/claim to take the seat.
+// Shown here so you can see the two halves: this string, and the image that
+// carries it. In your build these come from your own config file.
+const ACCESS_TOKEN = "6536792503";
+
+// The shared key that authorises game-side calls. Sent as X-Station-Key.
+// It is identical for every station and does NOT tell the server which
+// station you are -- that is why STATION_CODE is sent explicitly on each call.
+//
+// THIS MUST BE THE SAME STRING AS THE STATION_API_KEY ENVIRONMENT VARIABLE IN
+// LAMBDA, CHARACTER FOR CHARACTER. They are unrelated values otherwise, and the
+// server compares them in constant time. While this line is still a placeholder
+// every call returns 403 Forbidden and the screen says so on the first try.
+// Generate one with:  python -c "import secrets; print(secrets.token_urlsafe(32))"
+const STATION_API_KEY = "station_dbholotube_1";
+
+// Polling interval while the QR is showing and nobody has claimed a seat.
+// 3s feels instant to a human and costs about $0.02/day for ten stations.
+const POLL_FREE_MS = 3000;
+
+// Slow backstop poll used only while a player is seated. Catches a seat that
+// expired server-side without costing anything measurable.
+const POLL_SEATED_MS = 30000;
+
+// Which views exist. The whole sample is this state machine.
+const VIEWS = ["idle", "qr", "question", "result", "fault"];
+
+/* ===========================================================================
+   END OF CONFIG
+   =========================================================================== */
+
+const LETTERS = ["A", "B", "C", "D"];
+
+const $ = (id) => document.getElementById(id);
+let currentView = "idle";
+let fastTimer = null;     // 3s poll, only while the QR is up
+let slowTimer = null;     // 30s backstop, only while someone is seated
+let expireTimer = null;   // local countdown, armed from occupied_at
+let question = null;      // the question currently on screen
+
+document.querySelectorAll(".code-in").forEach((el) => { el.textContent = STATION_CODE; });
+$("code-label").textContent = STATION_CODE + "  /  token " + ACCESS_TOKEN;
+
+function log(message, tone) {
+  const stamp = new Date().toISOString().slice(11, 19);
+  const line = document.createElement("div");
+  line.textContent = stamp + "  " + message;
+  if (tone) { line.className = tone; }
+  $("log").appendChild(line);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+/* ===========================================================================
+   API CALLS
+   =========================================================================== */
+
+// Every game-side call goes through here. Two things worth copying:
+//
+//   - X-Station-Key is on every request. Without it the server returns 403 and
+//     refuses to answer, by design.
+//   - Never cache the access token or the key to disk in a real build. This
+//     sample hardcodes them only to have zero configuration.
+async function callApi(path, options) {
+  const opts = options || {};
+  const method = opts.method || "GET";
+  const config = { method: method, headers: { "X-Station-Key": STATION_API_KEY } };
+
+  if (opts.body !== undefined) {
+    config.headers["Content-Type"] = "application/json";
+    config.body = JSON.stringify(opts.body);
+  }
+
+  let response;
+  try {
+    response = await fetch(API_URL + path, config);
+  } catch (networkError) {
+    // Offline, DNS failure, CORS rejection. The screen should keep showing
+    // whatever it was showing -- a failed poll is not proof the seat is gone.
+    log("network failure: " + networkError.message, "bad");
+    throw networkError;
+  }
+
+  const data = await response.json().catch(function () { return {}; });
+  log(method + " " + path + "  ->  " + response.status
+      + (data.code ? "  " + data.code : ""));
+
+  if (!response.ok) {
+    // The server sends a machine-readable `code` on every refusal that the
+    // client has to tell apart. Switch on that, never on the message text.
+    const error = new Error(data.error || "Request failed");
+    error.status = response.status;
+    error.code = data.code || null;
+    error.body = data;
+    throw error;
+  }
+  return data;
+}
+
+// 1. Occupancy. This is the poll. Note what it does NOT return: the access
+//    token, and the visitor's phone number.
+function getOccupancy() {
+  return callApi("/stations/" + encodeURIComponent(STATION_CODE));
+}
+
+// 2. The question. correct_option is deliberately absent -- a client that could
+//    read the question must not be able to read the answer key from the same
+//    payload. You get it back after submitting.
+function getQuestion() {
+  return callApi("/stations/" + encodeURIComponent(STATION_CODE) + "/question");
+}
+
+// 3. Submit. You do NOT say who it is for. The seat decides, which is the
+//    whole point of the flow. Returns who was seated and whether they were
+//    right, and frees the seat as a side effect.
+function submitAnswer(option) {
+  return callApi("/stations/" + encodeURIComponent(STATION_CODE) + "/answer",
+                 { method: "POST", body: { option: option } });
+}
+
+// 4. Only for the "Done" button -- a player leaving before answering. Normal
+//    answers do NOT need this; the server already released the seat.
+//    This one needs the player's own browser token, not the station key, which
+//    is why a game client cannot call it. Left here to show the shape of it.
+function releaseSeat(playerToken) {
+  return callApi("/stations/" + encodeURIComponent(STATION_CODE) + "/release",
+                 { method: "POST",
+                   headers: { Authorization: "Bearer " + playerToken } });
+}
+
+/* ===========================================================================
+   POLLING
+   =========================================================================== */
+
+// A 403 will never fix itself by being retried: either STATION_API_KEY does not
+// match the Lambda's, or it is not set there at all. Both are configuration
+// problems, so pollOnce() stops the timers when it sees one rather than logging
+// a new 403 every three seconds for the rest of the event.
+const CONFIG_FAULT = { message: "", detail: "" };
+
+function stopTimers() {
+  [fastTimer, slowTimer, expireTimer].forEach(function (timer) {
+    if (timer !== null) { clearTimeout(timer); clearInterval(timer); }
+  });
+  fastTimer = slowTimer = expireTimer = null;
+}
+
+function showView(name) {
+  currentView = name;
+  VIEWS.forEach(function (v) { $("view-" + v).hidden = (v !== name); });
+}
+
+function startFreePolling() {
+  stopTimers();
+  fastTimer = setInterval(pollOnce, POLL_FREE_MS);
+  log("fast poll started (" + POLL_FREE_MS / 1000 + "s)");
+}
+
+function startSeatedPolling() {
+  stopTimers();
+  slowTimer = setInterval(pollOnce, POLL_SEATED_MS);
+  log("fast poll stopped, backstop at " + POLL_SEATED_MS / 1000 + "s");
+}
+
+// Armed when a seat is observed, using the server's own occupied_at and
+// stale_after_minutes. This is what stops the screen sitting on "playing" for
+// 20 minutes because a player walked away with their phone.
+// How long until this seat dies, in ms. 0 means it has already expired.
+// Derived entirely from the server's own occupied_at and stale_after_minutes,
+// so the screen agrees with the backend about when the seat goes away instead of
+// guessing with its own local clock.
+function msUntilExpiry(occupiedAt, staleMinutes) {
+  const startedAt = Date.parse(occupiedAt);
+  if (isNaN(startedAt) || !staleMinutes) { return null; }
+  return startedAt + staleMinutes * 60000 - Date.now();
+}
+
+function armExpiry(occupiedAt, staleMinutes) {
+  if (expireTimer !== null) { clearTimeout(expireTimer); expireTimer = null; }
+
+  const remaining = msUntilExpiry(occupiedAt, staleMinutes);
+  if (remaining === null) { return; }
+  if (remaining <= 0) { return; }   // already dead; the caller handles it
+
+  log("seat expires in " + Math.round(remaining / 1000) + "s");
+  expireTimer = setTimeout(function () {
+    log("seat expired locally, back to the QR", "bad");
+    showQr();
+  }, remaining);
+}
+
+async function pollOnce() {
+  try {
+    const data = await getOccupancy();
+
+    if (!data.occupied) {
+      // Still free. If we had been showing the question, the seat went away
+      // without us being told -- go back to the QR.
+      if (currentView === "question") {
+        log("seat is free again, returning to QR", "bad");
+        showQr();
+      }
+      return;
+    }
+
+    // Occupied -- but if the seat was already abandoned past the stale window,
+    // do not sit on it. Someone scanning right now will succeed, because the
+    // server's own claim query only checks the same window. Showing a question
+    // for a dead seat means the first player's answer gets credited to whoever
+    // takes the seat next.
+    const remaining = msUntilExpiry(data.occupied_at, data.stale_after_minutes);
+    if (remaining !== null && remaining <= 0) {
+      log("seat is occupied but already past the stale window -- waiting for a fresh scan", "bad");
+      return;
+    }
+
+    if (currentView === "qr") {
+      // This is the transition the 3-second poll exists for.
+      log("occupied by " + (data.visitor_name || "someone"), "good");
+      showQuestion(data);
+    }
+
+    armExpiry(data.occupied_at, data.stale_after_minutes);
+  } catch (error) {
+    if (error.status === 403) {
+      // STATION_API_KEY does not match the Lambda's, or is not set there at all.
+      // Retrying cannot fix it, so stop instead of logging a 403 every 3s.
+      stopTimers();
+      CONFIG_FAULT.message = "Forbidden (403)";
+      CONFIG_FAULT.detail =
+        "The Lambda rejected STATION_API_KEY. Either the value in the CONFIG "
+        + "block above does not match the Lambda environment variable, or "
+        + "STATION_API_KEY was never set in Lambda. Nothing else is wrong here.";
+      showFault();
+      return;
+    }
+    if (error.status === 404 && error.code === "unknown_station") {
+      // Wrong STATION_CODE, or the station was never created. Also a
+      // deployment mistake, so stop rather than repeat it forever.
+      stopTimers();
+      CONFIG_FAULT.message = "Unknown station (404)";
+      CONFIG_FAULT.detail =
+        "STATION_CODE above is \"" + STATION_CODE + "\". Either no station was "
+        + "created with that code, or it was created with a different one. "
+        + "Check the admin page's station list.";
+      showFault();
+      return;
+    }
+    // Anything else -- a dropped network, a 500 -- is treated as transient. The
+    // screen keeps showing what it showed, because a failed poll is not proof
+    // that the seat is gone.
+    log("poll failed: " + error.message, "bad");
+  }
+}
+
+/* ===========================================================================
+   VIEWS
+   =========================================================================== */
+
+// Shown when the API refuses every call. The poll is already stopped by then, so
+// this screen cannot be a false alarm from a single dropped request.
+function showFault() {
+  showView("fault");
+  $("fault-text").textContent = CONFIG_FAULT.message;
+  $("fault-detail").textContent = CONFIG_FAULT.detail;
+}
+
+function goIdle() {
+  stopTimers();
+  question = null;
+  CONFIG_FAULT.message = "";
+  CONFIG_FAULT.detail = "";
+  showView("idle");
+}
+
+function showQr() {
+  stopTimers();
+  question = null;
+  showView("qr");
+  startFreePolling();
+  pollOnce();   // check immediately, do not make them wait 3s
+}
+
+async function showQuestion(occupancy) {
+  stopTimers();
+  showView("question");
+  $("player-name").textContent = occupancy.visitor_name || "A player is here";
+
+  try {
+    const data = await getQuestion();
+    question = data.question;
+    $("question-text").textContent = question.prompt;
+    renderOptions(question.options);
+    startSeatedPolling();
+    armExpiry(occupancy.occupied_at, occupancy.stale_after_minutes);
+  } catch (error) {
+    if (error.code === "no_active_question") {
+      // The station exists but nobody has written a quiz yet. Hold the seat and
+      // keep the player informed rather than dropping them back to the QR.
+      $("question-text").textContent = "No quiz has been set for this station yet.";
+      $("options").innerHTML = "";
+      startSeatedPolling();
+    } else {
+      log("could not load the question: " + error.message, "bad");
+      showQr();
+    }
+  }
+}
+
+function renderOptions(options) {
+  const box = $("options");
+  box.innerHTML = "";
+  LETTERS.forEach(function (letter) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.innerHTML = "<b>" + letter + "</b>" + escapeHtml(options[letter]);
+    button.addEventListener("click", function () { choose(letter); });
+    box.appendChild(button);
+  });
+}
+
+async function choose(letter) {
+  if (!question) { return; }
+
+  // Disable the buttons immediately. A player tapping twice would otherwise
+  // fire two POSTs, and the second one would come back already_answered.
+  Array.prototype.forEach.call(
+    $("options").querySelectorAll("button"),
+    function (b) { b.disabled = true; }
+  );
+
+  try {
+    const result = await submitAnswer(letter);
+
+    // 200 means the answer is recorded AND the seat is already free. Go idle
+    // straight away -- do not wait for a poll to notice.
+    log((result.correct ? "correct" : "wrong")
+        + " -- " + result.visitor_name + " answered "
+        + result.selected_option, result.correct ? "good" : "bad");
+
+    showView("result");
+    $("result-text").textContent = result.correct ? "Correct!" : "Not quite.";
+    $("result-detail").textContent =
+      result.visitor_name + " answered " + result.selected_option
+      + ". The answer was " + result.correct_option + ".";
+    stopTimers();
+  } catch (error) {
+    switch (error.code) {
+      case "station_empty":
+        // Nobody was seated. Most likely the seat expired while the screen was
+        // sitting on the question. Go back to the QR, do not show feedback.
+        log("nobody is seated -- returning to QR", "bad");
+        showQr();
+        break;
+
+      case "already_answered":
+        // This player has answered this question before. The seat is NOT
+        // released by this refusal, so do not assume the station is free.
+        log("already answered -- the seat is still held", "bad");
+        showView("result");
+        $("result-text").textContent = "That one is already recorded.";
+        $("result-detail").textContent =
+          "The answer was " + error.body.correct_option + ".";
+        stopTimers();
+        break;
+
+      case "no_active_question":
+        log("no active quiz at this station", "bad");
+        $("question-text").textContent = "No quiz has been set for this station yet.";
+        $("options").innerHTML = "";
+        break;
+
+      default:
+        log("answer failed: " + error.message, "bad");
+        // Re-enable so the player can try again.
+        Array.prototype.forEach.call(
+          $("options").querySelectorAll("button"),
+          function (b) { b.disabled = false; }
+        );
+    }
+  }
+}
+
+function escapeHtml(text) {
+  return String(text === undefined || text === null ? "" : text)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/* ===========================================================================
+   WIRING
+   =========================================================================== */
+
+// Retry re-runs a single poll. It does not resume the 3s timer, so a still-broken
+// key produces one more 403 rather than a new one every three seconds.
+$("btn-retry").addEventListener("click", async function () {
+  CONFIG_FAULT.message = "";
+  CONFIG_FAULT.detail = "";
+  showView("qr");
+  try {
+    await pollOnce();
+    if (CONFIG_FAULT.message) { return; }
+    log("recovered", "good");
+    startFreePolling();
+  } catch (error) {
+    log("retry failed: " + error.message, "bad");
+  }
+});
+
+$("btn-show").addEventListener("click", showQr);
+$("btn-hide").addEventListener("click", goIdle);
+$("btn-again").addEventListener("click", goIdle);
+
+// "Done" needs the player's own browser token. A game client does not have it,
+// so in your build either hide this button, or have the player's phone send
+// the release. Left wired to the global below purely to show the shape of it.
+$("btn-done").addEventListener("click", function () {
+  if (!window.PLAYER_TOKEN) {
+    log("no PLAYER_TOKEN available -- a game client cannot release for the player",
+        "bad");
+    return;
+  }
+  releaseSeat(window.PLAYER_TOKEN)
+    .then(function () { log("seat released by the player"); goIdle(); })
+    .catch(function (error) { log("release failed: " + error.message, "bad"); });
+});
+
+goIdle();
+log("ready. press \"Scan to play\" to start polling.");
+</script>
+</body>
+</html>

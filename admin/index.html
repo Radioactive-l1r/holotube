@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>HoloTube admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+  <header>
+    <h1>HoloTube admin</h1>
+    <p class="warn">
+      This page is published on the public site. Everything it does is locked by
+      the admin key, but the key is only as safe as the browser holding it. Use a
+      device you control, and sign out when you are done.
+    </p>
+  </header>
+
+  <!-- Key entry. Nothing on this page works until it is filled in. -->
+  <section id="gate" class="card">
+    <h2>Admin key</h2>
+    <form id="key-form" novalidate>
+      <input id="key" type="password" autocomplete="off" spellcheck="false"
+             placeholder="X-Admin-Key">
+      <button type="submit">Connect</button>
+    </form>
+    <p id="gate-error" class="error" role="alert" hidden></p>
+  </section>
+
+  <div id="console" hidden>
+
+    <section class="card">
+      <div class="row">
+        <h2>Stations</h2>
+        <div class="spacer"></div>
+        <button id="refresh" type="button" class="ghost">Refresh</button>
+        <button id="disconnect" type="button" class="ghost">Sign out</button>
+      </div>
+      <table id="stations">
+        <thead>
+          <tr>
+            <th>Code</th><th>Name</th><th>Status</th><th>Quiz</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="stations-empty" class="muted" hidden>
+        No stations yet. Add one below.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Add a station</h2>
+      <form id="create-form" novalidate>
+        <label for="new-code">Code</label>
+        <input id="new-code" type="text" maxlength="20" spellcheck="false"
+               placeholder="RACI" required>
+        <p class="hint">1-20 characters, A-Z, 0-9, dash or underscore. Not "claim" or "me".</p>
+
+        <label for="new-name">Display name</label>
+        <input id="new-name" type="text" maxlength="100" placeholder="RACI Station" required>
+
+        <button type="submit">Create station</button>
+      </form>
+      <p id="create-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <section class="card" id="detail" hidden>
+      <h2>Station <span id="detail-code" class="code"></span></h2>
+
+      <div class="split">
+        <div>
+          <h3>QR code to print</h3>
+          <p class="hint">
+            Stick this where the station is. Scanning it claims the seat.
+            A guest can also type the digits by hand.
+          </p>
+          <div id="qr" class="qr"></div>
+          <p class="digits">Digits: <code id="detail-token"></code>
+            <button id="copy-token" type="button" class="ghost small">Copy</button>
+          </p>
+          <p><a id="download-qr" download="station-qr.png">Download PNG</a></p>
+          <p class="hint">
+            The digits never change once created. Re-creating a station keeps
+            them, so a reprint always produces a code that still works.
+          </p>
+        </div>
+
+        <div>
+          <h3>Quiz</h3>
+          <p id="quiz-none" class="muted" hidden>
+            No active quiz. The game will refuse answers until you save one.
+          </p>
+          <form id="quiz-form" novalidate>
+            <label for="prompt">Question</label>
+            <input id="prompt" type="text" maxlength="500"
+                   placeholder="What does the 'R' in RACI stand for?">
+
+            <fieldset>
+              <legend>Options</legend>
+              <div id="options"></div>
+              <p class="hint">Tick the correct one.</p>
+            </fieldset>
+
+            <button type="submit">Save quiz</button>
+          </form>
+          <p id="quiz-error" class="error" role="alert" hidden></p>
+          <p id="quiz-saved" class="ok" role="status" hidden></p>
+          <p class="hint">
+            Saving replaces the active quiz. Players who already answered keep
+            their answer, recorded against the wording they actually saw.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="js/vendor/qrcode.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

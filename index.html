@@ -28,13 +28,46 @@
     <p id="gate-error" class="error" role="alert" hidden></p>
   </main>
 
-  <!-- Shown once a token is held in this browser. -->
-  <main id="app" class="panel" hidden>
-    <h1>Welcome, <span id="username"></span></h1>
-    <p class="sub">You are registered.</p>
+  <!-- Registered, but not standing at a station yet. -->
+  <main id="lobby" class="panel" hidden>
+    <h1>Hi, <span id="lobby-name"></span></h1>
+    <p class="sub">Scan the QR code at a station to join it.</p>
+
+    <button id="scan" type="button">Scan QR code</button>
+
+    <div id="reader" class="reader" hidden></div>
+
+    <p id="scan-status" class="status" role="status" hidden></p>
+
+    <details id="manual">
+      <summary>Enter the code manually</summary>
+      <form id="manual-form" novalidate>
+        <label for="manual-code">Station code</label>
+        <input id="manual-code" name="access_token" type="text" inputmode="numeric"
+               maxlength="24" placeholder="Digits under the QR code" required>
+        <button type="submit">Join station</button>
+      </form>
+    </details>
+
+    <p id="lobby-error" class="error" role="alert" hidden></p>
+
     <button id="signout" type="button" class="link">Sign out</button>
   </main>
 
+  <!-- Holding a seat. The quiz itself runs in the game client, not here. -->
+  <main id="station" class="panel" hidden>
+    <h1>You are at</h1>
+    <p class="station-name" id="station-name"></p>
+    <p class="sub">Station claimed. Play the quiz on the screen.</p>
+
+    <p class="status" id="station-state" role="status" hidden></p>
+
+    <button id="done" type="button" class="secondary">Done at this station</button>
+
+    <button id="signout-2" type="button" class="link">Sign out</button>
+  </main>
+
+  <script src="js/vendor/html5-qrcode.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
