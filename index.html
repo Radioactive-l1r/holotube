@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HoloTube</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Shown until this browser has a valid token. -->
+  <main id="gate" class="panel" hidden>
+    <h1>HoloTube</h1>
+    <p class="sub">Register to continue.</p>
+
+    <form id="register-form" novalidate>
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" maxlength="100"
+             autocomplete="name" placeholder="Your name" required>
+
+      <label for="number">Number</label>
+      <input id="number" name="number" type="tel" maxlength="20"
+             autocomplete="tel" placeholder="Phone number" required>
+
+      <button id="submit" type="submit">Continue</button>
+    </form>
+
+    <p id="gate-error" class="error" role="alert" hidden></p>
+  </main>
+
+  <!-- Shown once a token is held in this browser. -->
+  <main id="app" class="panel" hidden>
+    <h1>Welcome, <span id="username"></span></h1>
+    <p class="sub">You are registered.</p>
+    <button id="signout" type="button" class="link">Sign out</button>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
