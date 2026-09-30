@@ -160,6 +160,21 @@ async function loadStations(preferCode) {
         : "free";
       status.className = station.occupied ? "busy" : "free";
 
+      // The backstop window, as the server reports it. Every station shares one
+      // value because STATION_STALE_MINUTES is a Lambda environment variable,
+      // so showing it per row is a reminder of what the game screens are using
+      // rather than a per-station setting.
+      const timeout = document.createElement("td");
+      if (station.occupied && station.occupied_at) {
+        const remainingMs = Date.parse(station.occupied_at)
+          + station.stale_after_minutes * 60000 - Date.now();
+        timeout.textContent = station.stale_after_minutes + " min total, "
+          + (remainingMs > 0 ? Math.ceil(remainingMs / 60000) + " min left"
+                             : "expired");
+      } else {
+        timeout.textContent = station.stale_after_minutes + " min";
+      }
+
       const quiz = document.createElement("td");
       quiz.textContent = "—";
       quiz.dataset.role = "quiz";
@@ -172,7 +187,7 @@ async function loadStations(preferCode) {
       open.addEventListener("click", () => selectStation(station.station_code));
       actions.append(open);
 
-      tr.append(code, name, status, quiz, actions);
+      tr.append(code, name, status, timeout, quiz, actions);
       stationsBody.append(tr);
     });
 

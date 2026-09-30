@@ -8,11 +8,16 @@ const html = fs.readFileSync("web/SAMPLE/RACI.html", "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 // ---- fake server -------------------------------------------------------
+// Mirrors what the API actually returns. last_seen_at is here for the same
+// reason the real handler sends it: it is the column the server's stale test runs
+// against, so a client that counted from occupied_at instead would sit on a
+// screen the server had already written off.
 const server = {
   stationExists: true,
   occupied: false,
   visitorName: null,
   occupiedAt: null,
+  lastSeenAt: null,
   staleMinutes: 5,
   hasQuestion: true,
   question: { question_id: 1, prompt: "What does the R in RACI stand for?",
@@ -75,7 +80,8 @@ function serve(path, method, body) {
     return { status: 200, data: {
       station_code: "X", display_name: "RACI Station",
       occupied: server.occupied, visitor_name: server.visitorName,
-      occupied_at: server.occupiedAt, stale_after_minutes: server.staleMinutes } };
+      occupied_at: server.occupiedAt, last_seen_at: server.lastSeenAt,
+      stale_after_minutes: server.staleMinutes } };
   }
   return { status: 404, data: { error: "Not found." } };
 }
@@ -83,13 +89,17 @@ function serve(path, method, body) {
 // ---- minimal DOM -------------------------------------------------------
 function makeEl(id) {
   const listeners = {};
+  const kids = [];
   return {
     id, hidden: false, textContent: "", innerHTML: "", className: "",
     disabled: false, scrollTop: 0, scrollHeight: 0, value: "",
     addEventListener(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); },
     _fire(ev) { (listeners[ev] || []).forEach(f => f({})); },
     _listeners: listeners,
-    appendChild() {}, querySelectorAll() { return []; },
+    // Record appended children so tests can read the log the way the DOM would.
+    appendChild(node) { kids.push(node); },
+    childNodes: kids,
+    querySelectorAll() { return []; },
   };
 }
 
@@ -292,6 +302,159 @@ els["btn-show"]._fire("click");
 await wait(80);
 ck("did not sit on an already-dead seat", view() !== "question", view());
 ck("  ...it is back to the QR, waiting for a fresh scan", view(), "qr");
+
+console.log("\n15. the stale window comes from the server, not the page");
+// log() appends <div> children with no newline chars, so innerHTML is one blob.
+function expiresSeconds() {
+  const line = Array.from(els["log"].childNodes)
+    .map((n) => n.textContent)
+    .join("\n")
+    .split("\n")
+    .filter((l) => l.includes("expires in"))
+    .pop();
+  if (!line) return null;
+  const m = line.match(/expires in (\d+)s/);
+  return m ? Number(m[1]) : null;
+}
+
+async function probeWindow(minutes) {
+  server.stationExists = true;
+  server.hasQuestion = true;
+  server.staleMinutes = minutes;
+  server.occupiedAt = new Date().toISOString();   // occupied right now
+  server.occupied = false;
+  els["btn-hide"]._fire("click");
+  els["btn-show"]._fire("click");
+  await wait(30);                                  // free seat -> stay on QR
+  server.occupied = true;
+  server.visitorName = "Probe";
+  await wait(3400);                                // poll sees it taken
+  return { view: view(), secs: expiresSeconds() };
+}
+
+// The countdown is read a few seconds after occupied_at, so it always sits a
+// little under the full window. Assert it is close to the server's number, and
+// specifically that it scales with it rather than being a constant baked in.
+function ckWindow(label, minutes) {
+  const full = minutes * 60;
+  const got = expiresSeconds();
+  console.log(`   stale_after_minutes=${minutes} -> ${got === null ? "(none)" : got + "s of " + full + "s"}`);
+  ck(label, got !== null && got <= full && got > full - 20, got);
+}
+
+for (const minutes of [1, 5, 45]) {
+  const r = await probeWindow(minutes);
+  ckWindow(`  counts down from the server's ${minutes}m window`, minutes);
+  ck("  ...and holds the seat for it", r.view, "question");
+  server.occupied = false;
+}
+
+console.log("\n16. the server's value is used verbatim, no local cap");
+{
+  // 999 is what a typo in the env var looks like before
+  // station_stale_minutes() clamps it to 240. The sample must do the arithmetic
+  // on whatever it is sent rather than imposing a limit of its own.
+  const r = await probeWindow(999);
+  const got = r.secs;
+  console.log(`   stale_after_minutes=999 -> ${got === null ? "(none)" : got + "s of 59940s"}`);
+  ck("uses the number it was given, uncapped",
+     got !== null && got <= 999 * 60 && got > 999 * 60 - 20, got);
+  server.occupied = false;
+}
+
+console.log("\n17. a missing stale_after_minutes leaves the seat held");
+{
+  // Defensive only. The API always sends it, but if a field is ever renamed the
+  // screen must keep the seat rather than expiring it at an unknown time.
+  server.stationExists = true;
+  server.hasQuestion = true;
+  server.occupied = true;
+  server.visitorName = "Probe";
+  server.occupiedAt = new Date().toISOString();
+  server.staleMinutes = null;                      // field absent from response
+  // The log element accumulates across scenarios, so only look at what this one
+  // appended. A stray "expires in" from an earlier scenario is not a failure.
+  const logBefore = els["log"].childNodes.length;
+  els["btn-hide"]._fire("click");
+  els["btn-show"]._fire("click");
+  await wait(3400);
+  ck("seated even with no window to count down", view(), "question");
+  const newLines = els["log"].childNodes
+    .slice(logBefore)
+    .map((n) => n.textContent)
+    .join("\n");
+  ck("  ...and does not invent an expiry time", !newLines.includes("expires in"));
+  server.occupied = false;
+  server.staleMinutes = 5;
+}
+
+console.log("\n18. the countdown follows last_seen_at, not occupied_at");
+{
+  // The two columns disagree on purpose. occupied_at is written once when the seat
+  // is claimed; last_seen_at is bumped by the player's heartbeat. A player who sat
+  // on the question for longer than the stale window is still there, and a screen
+  // counting from occupied_at would throw them off mid-answer.
+  //
+  // Asserted on the "expires in" countdown rather than on which view is showing,
+  // because a stale seat is refused by the poll's own guard before armExpiry is
+  // reached -- so the view alone cannot tell the two columns apart.
+  function countdown() {
+    const line = Array.from(els["log"].childNodes)
+      .map((n) => n.textContent).join("\n").split("\n")
+      .filter((l) => l.includes("expires in")).pop();
+    if (!line) return null;
+    const m = line.match(/expires in (\d+)s/);
+    return m ? Number(m[1]) : null;
+  }
+
+  server.stationExists = true;
+  server.hasQuestion = true;
+  server.occupied = true;
+  server.visitorName = "Long Reader";
+  server.occupiedAt = new Date(Date.now() - 30 * 60000).toISOString();  // 30 min ago
+  server.lastSeenAt = new Date().toISOString();                       // alive right now
+  server.staleMinutes = 5;
+  els["btn-hide"]._fire("click");
+  els["btn-show"]._fire("click");
+  await wait(3400);
+  ck("a live player past the old occupied_at window stays seated", view(), "question");
+  // 5 min from last_seen_at (now) = ~300s. Counting from occupied_at (30 min ago)
+  // would be long expired and produce no countdown at all.
+  const live = countdown();
+  ck("  ...and counts the full window from the heartbeat",
+     live !== null && live > 250 && live <= 300, live);
+
+  // Now the heartbeat stops. Same occupied_at, last_seen_at aged out, so the seat
+  // must die -- proving the countdown is reading the column the server reads.
+  server.lastSeenAt = new Date(Date.now() - 6 * 60000).toISOString(); // 6 min, past 5
+  els["btn-hide"]._fire("click");
+  els["btn-show"]._fire("click");
+  await wait(3400);
+  ck("  ...but a stale heartbeat releases it", view(), "qr");
+  server.occupied = false;
+  server.occupiedAt = null;
+  server.lastSeenAt = null;
+}
+
+console.log("\n19. an unattended QR stops polling after the stale window");
+{
+  server.stationExists = true;
+  server.hasQuestion = true;
+  server.occupied = false;                 // nobody ever scans
+  server.staleMinutes = 0.05;              // ~3s
+  els["btn-hide"]._fire("click");
+  els["btn-show"]._fire("click");
+  await wait(60);
+  ck("polling while the QR is up", pollCount() > 0, pollCount());
+
+  await wait(3400);                        // past the 3s window
+  ck("gave up on its own", view(), "idle");
+  const callsAfterIdle = server.calls.length;
+  await wait(3400);                        // would be 1+ more polls if still running
+  ck("and really stopped making requests",
+     server.calls.length === callsAfterIdle, server.calls.length - callsAfterIdle);
+  server.staleMinutes = 5;
+}
 
 console.log(`\n${"=".repeat(56)}`);
   console.log(fails === 0 ? "PASS -- every state transition verified" : `FAIL (${fails})`);

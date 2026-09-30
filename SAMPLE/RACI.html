@@ -264,7 +264,9 @@ const $ = (id) => document.getElementById(id);
 let currentView = "idle";
 let fastTimer = null;     // 3s poll, only while the QR is up
 let slowTimer = null;     // 30s backstop, only while someone is seated
-let expireTimer = null;   // local countdown, armed from occupied_at
+let expireTimer = null;   // local countdown, armed from last_seen_at
+let sessionTimer = null;  // how long the QR may stay up before polling gives up
+let sessionStartedAt = null;
 let question = null;      // the question currently on screen
 
 document.querySelectorAll(".code-in").forEach((el) => { el.textContent = STATION_CODE; });
@@ -367,10 +369,10 @@ function releaseSeat(playerToken) {
 const CONFIG_FAULT = { message: "", detail: "" };
 
 function stopTimers() {
-  [fastTimer, slowTimer, expireTimer].forEach(function (timer) {
+  [fastTimer, slowTimer, expireTimer, sessionTimer].forEach(function (timer) {
     if (timer !== null) { clearTimeout(timer); clearInterval(timer); }
   });
-  fastTimer = slowTimer = expireTimer = null;
+  fastTimer = slowTimer = expireTimer = sessionTimer = null;
 }
 
 function showView(name) {
@@ -384,29 +386,80 @@ function startFreePolling() {
   log("fast poll started (" + POLL_FREE_MS / 1000 + "s)");
 }
 
+// A QR left on screen with nobody at it is the case that used to poll forever.
+// Nothing about a free seat changes with time, so a screen nobody is looking at
+// keeps asking the same question indefinitely and getting the same answer. This
+// puts a bound on it: one stale_after_minutes window from the moment the QR went
+// up, and then the screen stops asking.
+//
+// Deliberately the server's own stale_after_minutes rather than a local constant,
+// so the operator changes it in one place (the Lambda env var) and both the seat
+// expiry and this session limit move together. If the server does not send the
+// field, no limit is armed -- see armSessionLimit.
+//
+// Armed from the first poll rather than from showQr() because stale_after_minutes
+// only becomes known once the server has answered. That first poll happens
+// immediately, so the window effectively starts when the QR went up.
+function armSessionLimit(staleMinutes) {
+  if (sessionTimer !== null) { return; }          // already counting
+  if (!staleMinutes || sessionStartedAt === null) { return; }
+
+  const elapsed = Date.now() - sessionStartedAt;
+  const remaining = staleMinutes * 60000 - elapsed;
+  if (remaining <= 0) { return; }                 // window already gone; caller re-arms next poll
+
+  log("QR session ends in " + Math.round(remaining / 1000) + "s");
+  sessionTimer = setTimeout(function () {
+    log("no player after " + staleMinutes + " min, stopping the poll", "bad");
+    endQrSession();
+  }, remaining);
+}
+
+// Back to idle with nothing scheduled. Distinct from goIdle() only in that it
+// says why it happened -- an unattended screen going quiet on its own looks like
+// a crash otherwise, and someone has to press the button again.
+function endQrSession() {
+  stopTimers();
+  question = null;
+  sessionStartedAt = null;
+  showView("idle");
+}
+
 function startSeatedPolling() {
   stopTimers();
   slowTimer = setInterval(pollOnce, POLL_SEATED_MS);
   log("fast poll stopped, backstop at " + POLL_SEATED_MS / 1000 + "s");
 }
 
-// Armed when a seat is observed, using the server's own occupied_at and
+// Armed when a seat is observed, using the server's own liveness timestamp and
 // stale_after_minutes. This is what stops the screen sitting on "playing" for
 // 20 minutes because a player walked away with their phone.
+//
+// Counted from last_seen_at, never occupied_at. occupied_at is written once when
+// the seat is claimed and never moves, so a player who stayed on the question the
+// whole time would be timed out on schedule while still sitting right there.
+// last_seen_at is what the player's phone bumps every 30 seconds, and it is the
+// same column the server's own stale test uses -- so the countdown here lands on
+// the same instant the seat actually dies instead of racing it.
+//
+// The one case with no last_seen_at is a seat that has just been claimed, and it
+// has occupied_at instead. Falling back to it keeps the countdown running on a
+// brand-new claim, where the two are the same instant anyway.
+function livenessAt(data) {
+  return data.last_seen_at || data.occupied_at;
+}
+
 // How long until this seat dies, in ms. 0 means it has already expired.
-// Derived entirely from the server's own occupied_at and stale_after_minutes,
-// so the screen agrees with the backend about when the seat goes away instead of
-// guessing with its own local clock.
-function msUntilExpiry(occupiedAt, staleMinutes) {
-  const startedAt = Date.parse(occupiedAt);
+function msUntilExpiry(lastSeenAt, staleMinutes) {
+  const startedAt = Date.parse(lastSeenAt);
   if (isNaN(startedAt) || !staleMinutes) { return null; }
   return startedAt + staleMinutes * 60000 - Date.now();
 }
 
-function armExpiry(occupiedAt, staleMinutes) {
+function armExpiry(lastSeenAt, staleMinutes) {
   if (expireTimer !== null) { clearTimeout(expireTimer); expireTimer = null; }
 
-  const remaining = msUntilExpiry(occupiedAt, staleMinutes);
+  const remaining = msUntilExpiry(lastSeenAt, staleMinutes);
   if (remaining === null) { return; }
   if (remaining <= 0) { return; }   // already dead; the caller handles it
 
@@ -427,7 +480,11 @@ async function pollOnce() {
       if (currentView === "question") {
         log("seat is free again, returning to QR", "bad");
         showQr();
+        return;
       }
+      // The QR is up and nobody has taken it. Start bounding this session so it
+      // stops asking eventually instead of polling for the rest of the event.
+      armSessionLimit(data.stale_after_minutes);
       return;
     }
 
@@ -436,7 +493,7 @@ async function pollOnce() {
     // server's own claim query only checks the same window. Showing a question
     // for a dead seat means the first player's answer gets credited to whoever
     // takes the seat next.
-    const remaining = msUntilExpiry(data.occupied_at, data.stale_after_minutes);
+    const remaining = msUntilExpiry(livenessAt(data), data.stale_after_minutes);
     if (remaining !== null && remaining <= 0) {
       log("seat is occupied but already past the stale window -- waiting for a fresh scan", "bad");
       return;
@@ -448,7 +505,7 @@ async function pollOnce() {
       showQuestion(data);
     }
 
-    armExpiry(data.occupied_at, data.stale_after_minutes);
+    armExpiry(livenessAt(data), data.stale_after_minutes);
   } catch (error) {
     if (error.status === 403) {
       // STATION_API_KEY does not match the Lambda's, or is not set there at all.
@@ -496,6 +553,7 @@ function showFault() {
 function goIdle() {
   stopTimers();
   question = null;
+  sessionStartedAt = null;
   CONFIG_FAULT.message = "";
   CONFIG_FAULT.detail = "";
   showView("idle");
@@ -504,6 +562,10 @@ function goIdle() {
 function showQr() {
   stopTimers();
   question = null;
+  // Marks the start of a new unattended stretch. armSessionLimit counts from here
+  // and no-ops once a timer is already running, so the re-entry above (seat freed
+  // mid-question) gets a fresh window rather than inheriting the old one.
+  sessionStartedAt = Date.now();
   showView("qr");
   startFreePolling();
   pollOnce();   // check immediately, do not make them wait 3s
@@ -520,7 +582,7 @@ async function showQuestion(occupancy) {
     $("question-text").textContent = question.prompt;
     renderOptions(question.options);
     startSeatedPolling();
-    armExpiry(occupancy.occupied_at, occupancy.stale_after_minutes);
+    armExpiry(livenessAt(occupancy), occupancy.stale_after_minutes);
   } catch (error) {
     if (error.code === "no_active_question") {
       // The station exists but nobody has written a quiz yet. Hold the seat and
