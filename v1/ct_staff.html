@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff Moderation - Commitment Tree</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 30px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .wrapper { width: 100%; max-width: 800px; }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
+    .badge {
+      background: #e0f2fe;
+      color: #0369a1;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    
+    .card-list { display: flex; flex-direction: column; gap: 14px; }
+.card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card-info { 
+      flex: 1; 
+      min-width: 0;
+    }
+    
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .visitor-name { font-weight: 600; font-size: 15px; color: #0f172a; }
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .tag.transparency { background: #e0f2fe; color: #0284c7; }
+    .tag.accountability { background: #ede9fe; color: #7c3aed; }
+    .tag.integrity { background: #dcfce7; color: #16a34a; }
+    .tag.compliance { background: #fce7f3; color: #db2777; }
+    
+    .pledge-text {
+      font-size: 14px;
+      color: #334155;
+      line-height: 1.4;
+    }
+    
+.btn-group { 
+      display: flex; 
+      gap: 8px; 
+      flex-shrink: 0;
+    }
+            .btn {
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-approve { background: #10b981; color: #ffffff; }
+    .btn-approve:hover { background: #059669; }
+    .btn-reject { background: #fee2e2; color: #dc2626; }
+    .btn-reject:hover { background: #fecaca; }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #94a3b8;
+      font-size: 14px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px dashed #cbd5e1;
+
+    }
+    /* Mobile adjustments: stack buttons underneath */
+    @media (max-width: 600px) {
+      .card {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .card-info {
+        padding-right: 0;
+        margin-bottom: 12px;
+      }
+      .btn-group {
+        width: 100%;
+      }
+      .btn {
+        flex: 1;
+        padding: 10px 0;
+        text-align: center;
+      }}
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+    <div class="header">
+      <div>
+        <h1>Commitment Moderation Queue</h1>
+        <p style="font-size:13px; color:#64748b;">Review and approve visitor pledges before publishing</p>
+      </div>
+      <div id="pendingCount" class="badge">0 Pending</div>
+    </div>
+
+    <div class="card-list" id="queueList">
+      <div class="empty-state">No pledges pending review.</div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
+
+    async function loadQueue() {
+      try {
+        const res = await fetch(`${API_BASE}/staff/commitments`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = data.pending || [];
+
+        document.getElementById("pendingCount").innerText = `${list.length} Pending`;
+        const container = document.getElementById("queueList");
+
+        if (list.length === 0) {
+          container.innerHTML = '<div class="empty-state">No pledges pending review. All caught up!</div>';
+          return;
+        }
+
+        container.innerHTML = list.map(item => `
+          <div class="card" id="card-${item.id}">
+            <div class="card-info">
+              <div class="card-meta">
+                <span class="visitor-name">${item.visitor_name}</span>
+                <span class="tag ${item.core_value.toLowerCase()}">${item.core_value}</span>
+              </div>
+              <div class="pledge-text">“${item.pledge_text}”</div>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-approve" onclick="moderate('${item.id}', 'APPROVED')">Approve</button>
+<button class="btn btn-reject" onclick="moderate('${item.id}', 'REWRITE')">Ask to Rewrite</button>            </div>
+          </div>
+        `).join("");
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+async function moderate(commitmentId, action) {
+      const card = document.getElementById(`card-${commitmentId}`);
+      if (card) card.style.opacity = "0.4";
+
+      try {
+        const res = await fetch(`${API_BASE}/staff/commitment-moderate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            commitment_id: commitmentId,
+            action: action.toUpperCase()
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to update status");
+        }
+
+        // Remove card from UI immediately
+        if (card) card.remove();
+        
+        // Reload list to sync count
+        loadQueue();
+      } catch (e) {
+        alert("Action failed: " + e.message);
+        if (card) card.style.opacity = "1";
+      }
+    }
+
+    loadQueue();
+    setInterval(loadQueue, 3000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commitment Tree Station</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0d13;
+      color: #fff;
+      padding: 30px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 760px;
+      background: #151821;
+      border: 1px solid #232838;
+      border-radius: 16px;
+      padding: 32px 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .hidden { display: none; }
+    h1 { font-size: 28px; color: #10b981; margin-bottom: 8px; }
+    p.subtitle { color: #94a3b8; font-size: 15px; margin-bottom: 20px; }
+    
+    .primary-btn {
+      background: #059669;
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .primary-btn:hover { background: #047857; }
+    #qrcode { display: inline-block; background: #fff; padding: 14px; border-radius: 10px; margin: 12px 0; }
+    
+    .values-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .val-btn {
+      background: #1e2433;
+      border: 1px solid #2e384d;
+      color: #cbd5e1;
+      padding: 10px 6px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .val-btn.active {
+      background: #10b981;
+      color: #fff;
+      border-color: #10b981;
+    }
+
+    textarea {
+      width: 100%;
+      height: 75px;
+      background: #0f1117;
+      border: 1px solid #2a3142;
+      border-radius: 8px;
+      color: #fff;
+      padding: 12px;
+      font-size: 15px;
+      resize: none;
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+    .char-hint { font-size: 12px; color: #64748b; text-align: right; margin-bottom: 16px; }
+
+    /* APPROVED COMMITMENT FEED (For Unity Team reference) */
+    .feed-container {
+      width: 100%;
+      max-width: 760px;
+    }
+    .feed-header {
+      font-size: 13px;
+      font-weight: bold;
+      color: #10b981;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    .feed-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .pledge-card {
+      background: #151821;
+      border: 1px solid #232838;
+      border-left: 4px solid #10b981;
+      border-radius: 8px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+    .pledge-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .pledge-author { font-weight: bold; font-size: 14px; color: #f1f5f9; }
+    .pledge-tag { font-size: 11px; background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .pledge-text { font-size: 13px; color: #94a3b8; line-height: 1.4; }
+
+    @media (max-width: 600px) {
+      .values-selector { grid-template-columns: repeat(2, 1fr); }
+      .feed-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- KIOSK STATION PANEL -->
+  <div class="container">
+    <div id="standbyView">
+      <h1>Commitment Tree Station</h1>
+      <p class="subtitle">Pledge your personal compliance commitment</p>
+      <button class="primary-btn" onclick="openSession()">Start / Show QR</button>
+    </div>
+
+    <div id="qrView" class="hidden">
+      <h1>Scan with Visitor Pass</h1>
+      <p class="subtitle">Pair to write your commitment pledge</p>
+      <div id="qrcode"></div>
+      <br /><br />
+      <button class="primary-btn" style="background:#334155;" onclick="resetStandby()">Cancel</button>
+    </div>
+
+    <div id="activeView" class="hidden">
+      <h1>Welcome, <span id="playerName" style="color:#34d399;"></span></h1>
+      <p class="subtitle">Select your pillar and write your 2-line commitment</p>
+
+      <div class="values-selector">
+        <button class="val-btn active" onclick="pickValue('Transparency', this)">Transparency</button>
+        <button class="val-btn" onclick="pickValue('Accountability', this)">Accountability</button>
+        <button class="val-btn" onclick="pickValue('Integrity', this)">Integrity</button>
+        <button class="val-btn" onclick="pickValue('Compliance', this)">Compliance</button>
+      </div>
+
+      <textarea id="pledgeInput" maxlength="140" placeholder="e.g. I promise to escalate compliance concerns immediately and lead by ethical example."></textarea>
+      <div class="char-hint">Max 2 lines / 140 characters</div>
+
+      <button class="primary-btn" onclick="submitCommitment()">Submit for Moderation</button>
+    </div>
+
+    <div id="resultView" class="hidden">
+      <h2 style="color:#34d399; margin-bottom:8px;">Pledge Submitted!</h2>
+      <p style="color:#94a3b8; font-size:14px;">Your commitment was sent to moderation and will appear on the tree once approved.</p>
+    </div>
+  </div>
+
+  <!-- LIVE APPROVED TREE FEED -->
+  <div class="feed-container">
+    <div class="feed-header">🌳 Live Approved Commitments (Tree Leaves)</div>
+    <div class="feed-grid" id="commitmentsFeed">
+      <div style="color:#64748b; font-size:13px;">Loading commitments...</div>
+    </div>
+  </div>
+
+  <script>
+    const STATION_ID = "station_commitment";
+    const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
+
+    let selectedValue = "Transparency";
+    let pollInterval = null;
+    let baselineTimestamp = null;
+    let qrRendered = false;
+
+    function pickValue(val, btn) {
+      selectedValue = val;
+      document.querySelectorAll(".val-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+    }
+
+    function openSession() {
+      showSection("qrView");
+
+      if (!qrRendered) {
+        new QRCode(document.getElementById("qrcode"), {
+          text: STATION_ID,
+          width: 180,
+          height: 180,
+          colorDark: "#000",
+          colorLight: "#fff"
+        });
+        qrRendered = true;
+      }
+
+      fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`)
+        .then(r => r.json())
+        .then(d => baselineTimestamp = d.last_trigger_at);
+
+      clearInterval(pollInterval);
+      pollInterval = setInterval(checkScanStatus, 1500);
+    }
+
+    async function checkScanStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.status === "ACTIVE" && d.visitor_name && d.last_trigger_at !== baselineTimestamp) {
+          clearInterval(pollInterval);
+          document.getElementById("playerName").innerText = d.visitor_name;
+          showSection("activeView");
+        }
+      } catch (e) {}
+    }
+
+    async function submitCommitment() {
+      const text = document.getElementById("pledgeInput").value.trim();
+      if (!text) return alert("Please enter your commitment.");
+
+      await fetch(`${API_BASE}/commitment-submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          station_id: STATION_ID,
+          core_value: selectedValue,
+          pledge_text: text
+        })
+      });
+
+      showSection("resultView");
+      document.getElementById("pledgeInput").value = "";
+      setTimeout(() => {
+        showSection("standbyView");
+      }, 3500);
+    }
+
+    function resetStandby() {
+      clearInterval(pollInterval);
+      fetch(`${API_BASE}/station-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ station_id: STATION_ID, reason: "CANCEL" })
+      });
+      showSection("standbyView");
+    }
+
+    function showSection(id) {
+      ["standbyView", "qrView", "activeView", "resultView"].forEach(s => {
+        document.getElementById(s).classList.toggle("hidden", s !== id);
+      });
+    }
+
+    // Load Public Tree Feed
+    async function loadTreeFeed() {
+      try {
+        const res = await fetch(`${API_BASE}/commitment-feed`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const grid = document.getElementById("commitmentsFeed");
+
+        if (!data.commitments || data.commitments.length === 0) {
+          grid.innerHTML = '<div style="color:#64748b; font-size:13px;">No approved pledges yet.</div>';
+          return;
+        }
+
+        grid.innerHTML = data.commitments.map(c => `
+          <div class="pledge-card">
+            <div class="pledge-header">
+              <span class="pledge-author">${c.visitor_name}</span>
+              <span class="pledge-tag">${c.core_value}</span>
+            </div>
+            <div class="pledge-text">“${c.pledge_text}”</div>
+          </div>
+        `).join("");
+      } catch (e) {}
+    }
+
+    loadTreeFeed();
+    setInterval(loadTreeFeed, 5000);
+  </script>
+</body>
+</html>

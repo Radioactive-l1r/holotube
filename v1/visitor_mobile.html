@@ -8,7 +8,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f1117; color: #f0f0f0; padding: 20px; }
-    .card { background: #1a1d26; border: 1px solid #2a2e3d; border-radius: 12px; padding: 24px; max-width: 400px; margin: 20px auto; }
+    .card { background: #1a1d26; border: 1px solid #2a2e3d; border-radius: 12px; padding: 24px; max-width: 420px; margin: 20px auto; }
     h2, h3 { margin-bottom: 16px; color: #fff; text-align: center; }
     .tab-bar { display: flex; gap: 8px; margin-bottom: 20px; }
     .tab-btn { flex: 1; padding: 10px; background: #252936; border: 1px solid #33384a; color: #888; border-radius: 8px; cursor: pointer; }
@@ -16,10 +16,34 @@
     input { width: 100%; padding: 12px; margin: 8px 0; background: #12141a; border: 1px solid #2d3345; border-radius: 8px; color: #fff; font-size: 15px; }
     button.action-btn { width: 100%; padding: 12px; margin: 12px 0; background: #0070f3; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
     .hidden { display: none; }
-    .key-badge { background: #112233; border: 1px dashed #0070f3; padding: 12px; border-radius: 8px; margin: 12px 0; text-align: center; }
-    .key-badge span { font-size: 24px; letter-spacing: 4px; font-weight: bold; color: #38bdf8; }
+    .key-badge { background: #112233; border: 1px dashed #0070f3; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; }
+    .key-badge span { font-size: 22px; letter-spacing: 4px; font-weight: bold; color: #38bdf8; }
+
+    /* Checklist Section */
+    .checklist-title { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin: 18px 0 10px; text-align: left; }
+    .station-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .station-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #12141a;
+      border: 1px solid #282d3d;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .status-pill {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+    .done { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid #22c55e; }
+    .pending { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid #334155; }
+
     #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; }
-    #statusMsg { text-align: center; margin-top: 15px; font-weight: bold; }
+    #statusMsg { text-align: center; margin-top: 15px; font-weight: bold; font-size: 14px; line-height: 1.4; }
+
   </style>
 </head>
 <body>
@@ -31,7 +55,7 @@
       <button class="tab-btn" id="tabLog" onclick="switchTab('log')">Login</button>
     </div>
 
-    <!-- Register -->
+    <!-- Register Form -->
     <div id="formReg">
       <input type="text" id="regName" placeholder="Full Name" />
       <input type="tel" id="regPhone" placeholder="Phone Number" />
@@ -39,7 +63,7 @@
       <button class="action-btn" onclick="handleRegister()">Register</button>
     </div>
 
-    <!-- Login -->
+    <!-- Login Form -->
     <div id="formLog" class="hidden">
       <input type="tel" id="logPhone" placeholder="Registered Phone" />
       <input type="text" id="logKey" placeholder="6-digit Key" maxlength="6" />
@@ -47,9 +71,9 @@
     </div>
   </div>
 
-  <!-- DASHBOARD -->
+  <!-- DASHBOARD SECTION -->
   <div id="dashSection" class="card hidden">
-    <h3>Visitor Pass</h3>
+    <h3>Visitor Passport</h3>
     <p style="text-align:center; color:#888;">Welcome, <span id="dashName" style="color:#fff; font-weight:bold;"></span></p>
     
     <div class="key-badge">
@@ -57,15 +81,51 @@
       <span id="dashKey">------</span>
     </div>
 
-    <button id="scanToggleBtn" class="action-btn" onclick="startScanner()">Open Scanner</button>
+    <!-- Station Checklist -->
+    <div class="checklist-title">Station Journey (<span id="completedCount">0</span>/4 Complete)</div>
+    <div class="station-list">
+      <div class="station-item">
+        <span>⚡ RACI Challenge</span>
+        <span id="badge-raci" class="status-pill pending">Pending</span>
+      </div>
+      <div class="station-item">
+        <span>🗳️ Values Voting & Raffle</span>
+        <span id="badge-voting" class="status-pill pending">Pending</span>
+      </div>
+      <div class="station-item">
+        <span>🌳 Commitment Tree</span>
+        <span id="badge-commitment" class="status-pill pending">Pending</span>
+      </div>
+      <div class="station-item">
+        <span>📸 AR / Avatar Try-On</span>
+        <span id="badge-tryon" class="status-pill pending">Pending</span>
+      </div>
+    </div>
+
+    <button id="scanToggleBtn" class="action-btn" onclick="startScanner()">Scan Station QR</button>
     <div id="reader"></div>
     <div id="statusMsg"></div>
+
+    <button class="action-btn" style="background: #252936; margin-top: 14px;" onclick="refreshProgress()">Refresh Journey</button>
+    <button class="action-btn" style="background: #33384a; margin-top: 6px;" onclick="handleLogout()">Logout</button>
   </div>
 
   <script>
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
     let currentUser = null;
     let html5QrCode = null;
+
+    window.onload = () => {
+      const saved = localStorage.getItem("ht_user");
+      if (saved) {
+        try {
+          currentUser = JSON.parse(saved);
+          renderDashboard();
+        } catch (e) {
+          localStorage.removeItem("ht_user");
+        }
+      }
+    };
 
     function switchTab(mode) {
       document.getElementById("tabReg").classList.toggle("active", mode === "reg");
@@ -78,7 +138,7 @@
       const name = document.getElementById("regName").value.trim();
       const phone = document.getElementById("regPhone").value.trim();
       const email = document.getElementById("regEmail").value.trim();
-      if (!name || !phone) return alert("Please fill Name and Phone");
+      if (!name || !phone) return alert("Please enter Name and Phone");
 
       const token = "usr_" + Math.random().toString(36).substr(2, 9);
       try {
@@ -88,7 +148,10 @@
           body: JSON.stringify({ token, name, phone, email })
         });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Registration failed");
+
         currentUser = { token: data.token, name: data.name, key: data.visitor_key };
+        localStorage.setItem("ht_user", JSON.stringify(currentUser));
         renderDashboard();
       } catch (e) {
         alert("Registration failed: " + e.message);
@@ -110,6 +173,7 @@
         if (!res.ok) throw new Error(data.error || "Login failed");
 
         currentUser = { token: data.token, name: data.name, key: data.visitor_key };
+        localStorage.setItem("ht_user", JSON.stringify(currentUser));
         renderDashboard();
       } catch (e) {
         alert(e.message);
@@ -121,10 +185,50 @@
       document.getElementById("dashSection").classList.remove("hidden");
       document.getElementById("dashName").innerText = currentUser.name;
       document.getElementById("dashKey").innerText = currentUser.key;
+      refreshProgress();
     }
 
-    function startScanner() {
+    async function refreshProgress() {
+      if (!currentUser || !currentUser.token) return;
+      try {
+        const res = await fetch(`${API_BASE}/visitor-progress?token=${currentUser.token}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        let count = 0;
+        const updatePill = (id, isDone) => {
+          const el = document.getElementById(id);
+          if (isDone) {
+            count++;
+            el.className = "status-pill done";
+            el.innerText = "✓ Done";
+          } else {
+            el.className = "status-pill pending";
+            el.innerText = "Pending";
+          }
+        };
+
+        updatePill("badge-raci", data.stations.raci);
+        updatePill("badge-voting", data.stations.voting);
+        updatePill("badge-commitment", data.stations.commitment);
+        updatePill("badge-tryon", data.stations.tryon);
+        document.getElementById("completedCount").innerText = count;
+      } catch (err) {}
+    }
+
+    function handleLogout() {
+      if (html5QrCode) {
+        html5QrCode.stop().catch(() => {});
+      }
+      localStorage.removeItem("ht_user");
+      currentUser = null;
+      document.getElementById("dashSection").classList.add("hidden");
+      document.getElementById("authSection").classList.remove("hidden");
+    }
+
+   function startScanner() {
       document.getElementById("scanToggleBtn").classList.add("hidden");
+      document.getElementById("statusMsg").innerText = "";
       html5QrCode = new Html5Qrcode("reader");
 
       html5QrCode.start(
@@ -132,6 +236,7 @@
         { fps: 10, qrbox: 240 },
         async (decodedStationId) => {
           await html5QrCode.stop();
+          document.getElementById("statusMsg").style.color = "#38bdf8";
           document.getElementById("statusMsg").innerText = "Connecting to station...";
 
           try {
@@ -145,6 +250,7 @@
             if (res.ok) {
               document.getElementById("statusMsg").style.color = "#4ade80";
               document.getElementById("statusMsg").innerText = "Connected to " + decodedStationId + "!";
+              refreshProgress();
             } else {
               throw new Error(data.error || "Scan failed");
             }
@@ -153,8 +259,13 @@
             document.getElementById("statusMsg").innerText = err.message;
           }
 
+          // Auto-hide message after 5 seconds
+          setTimeout(() => {
+            document.getElementById("statusMsg").innerText = "";
+          }, 5000);
+
           document.getElementById("scanToggleBtn").classList.remove("hidden");
-          document.getElementById("scanToggleBtn").innerText = "Scan Another Station";
+          document.getElementById("scanToggleBtn").innerText = "Scan QR";
         },
         (error) => {}
       ).catch(err => {

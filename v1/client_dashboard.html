@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Client Analytics Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #ffffff;
+      color: #1a202c;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .dashboard-container {
+      width: 100%;
+      max-width: 900px;
+    }
+
+    /* TOP STAT CARDS */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background-color: #0e2023;
+      border-radius: 8px;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 110px;
+    }
+
+    .stat-number {
+      font-size: 32px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1;
+      letter-spacing: -0.5px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0d9488;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 14px;
+      line-height: 1.3;
+    }
+
+    /* VOTE DISTRIBUTION SECTION */
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0d9488;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 20px;
+    }
+
+    .vote-item {
+      display: grid;
+      grid-template-columns: 130px 1fr 50px;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .vote-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1a202c;
+    }
+
+    .bar-track {
+      background-color: #e6ebed;
+      border-radius: 12px;
+      height: 20px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .bar-fill {
+      background-color: #007a78;
+      height: 100%;
+      border-radius: 12px;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .vote-percentage {
+      font-size: 15px;
+      font-weight: 700;
+      color: #007a78;
+      text-align: right;
+    }
+
+    /* MOBILE BREAKPOINTS */
+    @media (max-width: 768px) {
+      body {
+        padding: 16px;
+      }
+
+      .stats-row {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+
+      .stat-card {
+        padding: 16px 14px;
+        min-height: 95px;
+      }
+
+      .stat-number {
+        font-size: 26px;
+      }
+
+      .stat-label {
+        font-size: 10px;
+        margin-top: 10px;
+      }
+
+      .vote-item {
+        grid-template-columns: 110px 1fr 45px;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .vote-name {
+        font-size: 13px;
+      }
+
+      .bar-track {
+        height: 16px;
+      }
+
+      .vote-percentage {
+        font-size: 13px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .vote-item {
+        grid-template-columns: 95px 1fr 40px;
+      }
+      .vote-name {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="dashboard-container">
+
+    <!-- 4 STAT CARDS (2x2 on mobile) -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number" id="visitorsRegistered">0</div>
+        <div class="stat-label">Visitors Registered</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="journeyCompletion">0%</div>
+        <div class="stat-label">Journey Completion</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="commitmentsMade">0</div>
+        <div class="stat-label">Commitments Made</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="votesCast">0</div>
+        <div class="stat-label">Votes Cast</div>
+      </div>
+    </div>
+
+    <!-- VOTE DISTRIBUTION -->
+    <div>
+      <div class="section-title">Vote Distribution Across the Four Values</div>
+
+      <div class="vote-item">
+        <span class="vote-name">Transparency</span>
+        <div class="bar-track">
+          <div id="barTransparency" class="bar-fill" style="width: 0%;"></div>
+        </div>
+        <span id="pctTransparency" class="vote-percentage">0%</span>
+      </div>
+
+      <div class="vote-item">
+        <span class="vote-name">Accountability</span>
+        <div class="bar-track">
+          <div id="barAccountability" class="bar-fill" style="width: 0%;"></div>
+        </div>
+        <span id="pctAccountability" class="vote-percentage">0%</span>
+      </div>
+
+      <div class="vote-item">
+        <span class="vote-name">Integrity</span>
+        <div class="bar-track">
+          <div id="barIntegrity" class="bar-fill" style="width: 0%;"></div>
+        </div>
+        <span id="pctIntegrity" class="vote-percentage">0%</span>
+      </div>
+
+      <div class="vote-item">
+        <span class="vote-name">Compliance</span>
+        <div class="bar-track">
+          <div id="barCompliance" class="bar-fill" style="width: 0%;"></div>
+        </div>
+        <span id="pctCompliance" class="vote-percentage">0%</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
+
+    async function updateDashboard() {
+      try {
+        const res = await fetch(`${API_BASE}/admin-stats`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const total = Number(data.total_visitors) || 0;
+        const commitments = Number(data.completions?.commitment) || 0;
+        const votes = Number(data.completions?.voting) || 0;
+        const raci = Number(data.completions?.raci) || 0;
+
+        const completedAvg = total > 0 ? Math.round(((raci + votes + commitments) / (total * 4)) * 100) : 0;
+
+        document.getElementById("visitorsRegistered").innerText = total.toLocaleString();
+        document.getElementById("journeyCompletion").innerText = `${completedAvg}%`;
+        document.getElementById("commitmentsMade").innerText = commitments.toLocaleString();
+        document.getElementById("votesCast").innerText = votes.toLocaleString();
+
+        const voteTallies = data.votes || {};
+        const values = ["Transparency", "Accountability", "Integrity", "Compliance"];
+
+        values.forEach(val => {
+          const count = Number(voteTallies[val]) || 0;
+          const pct = votes > 0 ? Math.round((count / votes) * 100) : 0;
+
+          const bar = document.getElementById(`bar${val}`);
+          const pctText = document.getElementById(`pct${val}`);
+
+          if (bar && pctText) {
+            bar.style.width = `${pct}%`;
+            pctText.innerText = `${pct}%`;
+          }
+        });
+
+      } catch (err) {
+        console.error("Dashboard refresh error:", err);
+      }
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 5000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Voting Station</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0d13;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .container {
+      width: 90%;
+      max-width: 800px;
+      background: #151821;
+      border: 1px solid #232838;
+      border-radius: 16px;
+      padding: 40px 30px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    }
+    .hidden { display: none; }
+    h1 { font-size: 32px; margin-bottom: 12px; color: #a855f7; }
+    p.subtitle { color: #94a3b8; font-size: 18px; margin-bottom: 24px; }
+    
+    .primary-btn {
+      background: #9333ea;
+      color: #fff;
+      border: none;
+      padding: 14px 32px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .primary-btn:hover { background: #7e22ce; }
+    #qrcode { display: inline-block; background: #fff; padding: 16px; border-radius: 12px; margin: 15px 0; }
+    
+    .timer-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 16px;
+      background: #1e293b;
+      color: #f59e0b;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .greeting { font-size: 32px; font-weight: bold; margin-bottom: 10px; color: #c084fc; }
+    
+    .values-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .val-card {
+      background: #252b3d;
+      border: 2px solid #333c54;
+      padding: 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .val-card:hover { border-color: #a855f7; transform: translateY(-3px); background: #2a3147; }
+    .val-title { font-size: 20px; font-weight: bold; color: #fff; display: block; margin-bottom: 6px; }
+    .val-desc { font-size: 13px; color: #94a3b8; }
+    
+    .result-box {
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-size: 22px;
+      font-weight: bold;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid #a855f7;
+      color: #c084fc;
+    }
+    
+    .reset-btn {
+      background: #334155;
+      color: #cbd5e1;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- VIEW 1: STANDBY -->
+    <div id="standbyView">
+      <h1>Values Voting Station</h1>
+      <p class="subtitle">Vote for your core value & enter the raffle draw</p>
+      <button class="primary-btn" onclick="openSession()">Start / Show QR</button>
+    </div>
+
+    <!-- VIEW 2: QR CODE -->
+    <div id="qrView" class="hidden">
+      <h1>Scan to Vote</h1>
+      <p class="subtitle">Scan the QR code with your Visitor App</p>
+      <div id="qrcode"></div>
+      <br />
+      <div class="timer-badge">Session expires in: <span id="qrTimeLeft">60</span>s</div>
+      <br /><br />
+      <button class="reset-btn" onclick="endSession('CANCEL')">Cancel</button>
+    </div>
+
+    <!-- VIEW 3: ACTIVE VOTING -->
+    <div id="activeView" class="hidden">
+      <div class="greeting">Welcome, <span id="playerName"></span>!</div>
+      <p style="color:#94a3b8;">Cast your vote for the core value that represents our culture best:</p>
+      <div class="timer-badge" style="margin-top:10px;">Time Remaining: <span id="gameTimeLeft">45</span>s</div>
+
+      <div class="values-grid">
+        <div class="val-card" onclick="castVote('Transparency')">
+          <span class="val-title">Transparency</span>
+          <span class="val-desc">Openness, clarity, and honest communication.</span>
+        </div>
+        <div class="val-card" onclick="castVote('Accountability')">
+          <span class="val-title">Accountability</span>
+          <span class="val-desc">Taking complete ownership of decisions and results.</span>
+        </div>
+        <div class="val-card" onclick="castVote('Integrity')">
+          <span class="val-title">Integrity</span>
+          <span class="val-desc">Doing the right thing, even when no one is watching.</span>
+        </div>
+        <div class="val-card" onclick="castVote('Compliance')">
+          <span class="val-title">Compliance</span>
+          <span class="val-desc">Upholding strict standards and ethical guidelines.</span>
+        </div>
+      </div>
+
+      <button class="reset-btn" onclick="endSession('WALKAWAY')">Leave / Walk Away</button>
+    </div>
+
+    <!-- VIEW 4: RESULT / RAFFLE CONFIRMATION -->
+    <div id="resultView" class="hidden">
+      <div id="resultBox" class="result-box"></div>
+      <p style="color:#94a3b8; margin-bottom: 20px;">Returning to main screen in 4 seconds...</p>
+    </div>
+  </div>
+
+  <script>
+    const STATION_ID = "station_voting";
+    const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
+    
+    let pollInterval = null;
+    let qrTimer = null;
+    let gameTimer = null;
+    let baselineTimestamp = null;
+    let qrGenerated = false;
+
+    function openSession() {
+      showSection("qrView");
+
+      if (!qrGenerated) {
+        new QRCode(document.getElementById("qrcode"), {
+          text: STATION_ID,
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+        qrGenerated = true;
+      }
+
+      getInitialTimestamp();
+
+      let remaining = 60;
+      document.getElementById("qrTimeLeft").innerText = remaining;
+      clearInterval(qrTimer);
+      qrTimer = setInterval(() => {
+        remaining--;
+        document.getElementById("qrTimeLeft").innerText = remaining;
+        if (remaining <= 0) endSession("CANCEL");
+      }, 1000);
+
+      clearInterval(pollInterval);
+      pollInterval = setInterval(checkStationStatus, 1500);
+    }
+
+    async function getInitialTimestamp() {
+      try {
+        const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
+        if (res.ok) {
+          const data = await res.json();
+          baselineTimestamp = data.last_trigger_at;
+        }
+      } catch (e) {}
+    }
+
+    async function checkStationStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        if (data.status === "ACTIVE" && data.visitor_name && data.last_trigger_at !== baselineTimestamp) {
+          clearInterval(pollInterval);
+          clearInterval(qrTimer);
+          startVoting(data.visitor_name);
+        }
+      } catch (err) {}
+    }
+
+    function startVoting(name) {
+      showSection("activeView");
+      document.getElementById("playerName").innerText = name;
+
+      let remaining = 45;
+      document.getElementById("gameTimeLeft").innerText = remaining;
+      clearInterval(gameTimer);
+      gameTimer = setInterval(() => {
+        remaining--;
+        document.getElementById("gameTimeLeft").innerText = remaining;
+        if (remaining <= 0) {
+          endSession("TIMEOUT");
+        }
+      }, 1000);
+    }
+
+    async function castVote(valueName) {
+      clearInterval(gameTimer);
+
+      try {
+        const res = await fetch(`${API_BASE}/station-vote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            station_id: STATION_ID,
+            voted_value: valueName
+          })
+        });
+        const data = await res.json();
+
+        showSection("resultView");
+        document.getElementById("resultBox").innerHTML = `
+          <div>Vote Registered: <strong>${data.voted_value || valueName}</strong></div>
+          <div style="font-size:16px; margin-top:8px; color:#4ade80;">🎟 Entered into the Raffle Draw!</div>
+        `;
+      } catch (e) {
+        showSection("resultView");
+        document.getElementById("resultBox").innerText = "Completed session.";
+      }
+
+      setTimeout(() => {
+        showSection("standbyView");
+      }, 4000);
+    }
+
+    async function endSession(reason) {
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
+      clearInterval(gameTimer);
+
+      await fetch(`${API_BASE}/station-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ station_id: STATION_ID, reason: reason })
+      });
+      showSection("standbyView");
+    }
+
+    function showSection(id) {
+      ["standbyView", "qrView", "activeView", "resultView"].forEach(sec => {
+        document.getElementById(sec).classList.toggle("hidden", sec !== id);
+      });
+    }
+  </script>
+</body>
+</html>
