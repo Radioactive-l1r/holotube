@@ -12,36 +12,37 @@
       background: #0b0d13;
       color: #fff;
       display: flex;
-      align-items: center;
       justify-content: center;
+      align-items: center;
       min-height: 100vh;
-      text-align: center;
+      padding: 20px;
     }
-    .container {
-      width: 90%;
-      max-width: 800px;
+    .kiosk-card {
+      width: 100%;
+      max-width: 680px;
       background: #151821;
       border: 1px solid #232838;
       border-radius: 16px;
-      padding: 40px 30px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      padding: 32px;
+      text-align: center;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     }
     .hidden { display: none; }
-    h1 { font-size: 32px; margin-bottom: 12px; color: #38bdf8; }
-    p.subtitle { color: #94a3b8; font-size: 18px; margin-bottom: 24px; }
-    
-    .primary-btn {
-      background: #0070f3;
+    h1 { font-size: 26px; color: #38bdf8; margin-bottom: 8px; }
+    p.sub { color: #94a3b8; font-size: 15px; margin-bottom: 24px; }
+    .btn {
+      background: #0284c7;
       color: #fff;
       border: none;
-      padding: 14px 32px;
-      font-size: 18px;
+      padding: 12px 28px;
+      font-size: 16px;
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
     }
-    #qrcode { display: inline-block; background: #fff; padding: 16px; border-radius: 12px; margin: 15px 0; }
-    
+    .btn:hover { background: #0369a1; }
+    #qrcode { display: inline-block; background: #fff; padding: 14px; border-radius: 10px; margin: 16px 0; }
+
     .timer-badge {
       display: inline-block;
       margin-top: 10px;
@@ -53,238 +54,248 @@
       font-weight: bold;
     }
 
-    .greeting { font-size: 32px; font-weight: bold; margin-bottom: 10px; color: #4ade80; }
+    /* Quiz Layout */
+    .progress-bar { font-size: 13px; color: #38bdf8; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; }
     .scenario-box {
-      background: #1e2230;
+      background: #0f1117;
       border-left: 4px solid #38bdf8;
-      padding: 18px;
-      border-radius: 8px;
+      border-radius: 6px;
+      padding: 14px 18px;
       text-align: left;
-      font-size: 17px;
-      line-height: 1.5;
-      margin-bottom: 20px;
+      font-size: 15px;
+      line-height: 1.4;
       color: #e2e8f0;
+      margin-bottom: 14px;
     }
-    .options-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    .opt-card {
-      background: #252b3d;
-      border: 2px solid #333c54;
-      padding: 16px;
-      border-radius: 10px;
-      text-align: left;
-      cursor: pointer;
-      transition: border-color 0.2s, transform 0.1s;
-    }
-    .opt-card:hover { border-color: #38bdf8; transform: translateY(-2px); }
-    .opt-letter { font-size: 20px; font-weight: bold; color: #38bdf8; display: block; margin-bottom: 4px; }
-    .opt-desc { font-size: 13px; color: #94a3b8; }
-    
-    .result-box {
-      padding: 24px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-      font-size: 22px;
-      font-weight: bold;
-    }
-    .correct { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #4ade80; }
-    .incorrect { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; }
-    
-    .reset-btn {
-      background: #334155;
-      color: #cbd5e1;
-      border: none;
-      padding: 10px 20px;
+    .question-title { font-size: 16px; font-weight: 600; text-align: left; margin-bottom: 18px; color: #fff; }
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .opt-btn {
+      background: #1e2433;
+      border: 1px solid #2d3748;
       border-radius: 8px;
-      cursor: pointer;
+      padding: 14px;
+      color: #cbd5e1;
       font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
     }
+    .opt-btn:hover { background: #283247; border-color: #475569; }
+    .opt-btn.correct { background: #064e3b !important; border-color: #10b981 !important; color: #fff !important; }
+    .opt-btn.wrong { background: #7f1d1d !important; border-color: #ef4444 !important; color: #fff !important; }
+
+    .result-score { font-size: 48px; font-weight: bold; color: #4ade80; margin: 16px 0; }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <!-- VIEW 1: STANDBY -->
+  <div class="kiosk-card">
+    
+    <!-- STANDBY -->
     <div id="standbyView">
       <h1>RACI Challenge Station</h1>
-      <p class="subtitle">Press start to display the scan QR</p>
-      <button class="primary-btn" onclick="openSession()">Start Game / Show QR</button>
+      <p class="sub">5 questions • 50 points each • Test your governance mastery</p>
+      <button class="btn" onclick="openSession()">Start Game</button>
     </div>
 
-    <!-- VIEW 2: QR CODE -->
+    <!-- QR SCAN -->
     <div id="qrView" class="hidden">
-      <h1>Scan to Connect</h1>
-      <p class="subtitle">Scan the QR code with your Visitor App</p>
+      <h1>Scan with Visitor Pass</h1>
+      <p class="sub">Scan this code on your mobile phone to begin</p>
       <div id="qrcode"></div>
       <br />
       <div class="timer-badge">Session expires in: <span id="qrTimeLeft">60</span>s</div>
       <br /><br />
-      <button class="reset-btn" onclick="endSession('CANCEL')">Cancel</button>
+      <button class="btn" style="background:#334155;" onclick="resetStandby('CANCEL')">Cancel</button>
     </div>
 
-    <!-- VIEW 3: ACTIVE GAME -->
+    <!-- QUIZ ACTIVE -->
     <div id="activeView" class="hidden">
-      <div class="greeting">Hi, <span id="playerName"></span>!</div>
-      <div class="timer-badge" style="margin-bottom:15px;">Answer Time Left: <span id="gameTimeLeft">45</span>s</div>
-      
-      <div class="scenario-box">
-        <strong>Scenario:</strong> "A quarterly compliance report is due. An analyst prepares it. The legal team reviews the wording. The department head signs it off and answers for it. Finance is informed once filed."<br /><br />
-        <strong>Question:</strong> What is the Legal Team's role? (Simulate stepping on pressure pad)
-      </div>
+      <div class="progress-bar" id="qProgress">Question 1 of 5</div>
+      <div class="scenario-box" id="qScenario"></div>
+      <div class="question-title" id="qText"></div>
 
-      <div class="options-grid">
-        <div class="opt-card" onclick="submitAnswer('R')">
-          <span class="opt-letter">R - Responsible</span>
-          <span class="opt-desc">Does the work to complete the task.</span>
-        </div>
-        <div class="opt-card" onclick="submitAnswer('A')">
-          <span class="opt-letter">A - Accountable</span>
-          <span class="opt-desc">Sole person with final sign-off authority.</span>
-        </div>
-        <div class="opt-card" onclick="submitAnswer('C')">
-          <span class="opt-letter">C - Consulted</span>
-          <span class="opt-desc">Provides essential subject matter input before action.</span>
-        </div>
-        <div class="opt-card" onclick="submitAnswer('I')">
-          <span class="opt-letter">I - Informed</span>
-          <span class="opt-desc">Updated on progress and results after completion.</span>
-        </div>
-      </div>
-
-      <button class="reset-btn" onclick="endSession('WALKAWAY')">Leave / Walk Away</button>
+      <div class="options-grid" id="optionsContainer"></div>
     </div>
 
-    <!-- VIEW 4: RESULT FEEDBACK -->
+    <!-- RESULT -->
     <div id="resultView" class="hidden">
-      <div id="resultBox" class="result-box"></div>
-      <p style="color:#94a3b8; margin-bottom: 20px;">Returning to main screen in 4 seconds...</p>
+      <h1>Challenge Completed!</h1>
+      <p class="sub">Player: <span id="resPlayer" style="color:#fff; font-weight:bold;"></span></p>
+      <div class="result-score" id="resScore">0 pts</div>
+      <p id="resBreakdown" style="color:#94a3b8; font-size:15px; margin-bottom: 20px;"></p>
     </div>
+
   </div>
 
   <script>
     const STATION_ID = "station_raci";
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
-    
+
+    let currentScreen = "standbyView";
+    let questions = [];
+    let currentIndex = 0;
+    let correctCount = 0;
     let pollInterval = null;
     let qrTimer = null;
-    let gameTimer = null;
+    let nextQuestionTimeout = null;
     let baselineTimestamp = null;
-    let qrGenerated = false;
+    let activePlayerName = "";
+    let isAnsweringLocked = false;
+    let qrRendered = false;
+
+    // Fetch questions on boot
+    fetch("raci_questions.json")
+      .then(r => r.json())
+      .then(data => questions = data)
+      .catch(e => console.error("Error loading raci_questions.json", e));
 
     function openSession() {
       showSection("qrView");
-
-      if (!qrGenerated) {
+      if (!qrRendered) {
         new QRCode(document.getElementById("qrcode"), {
           text: STATION_ID,
-          width: 200,
-          height: 200,
-          colorDark: "#000000",
-          colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.H
+          width: 180,
+          height: 180,
+          colorDark: "#000",
+          colorLight: "#fff"
         });
-        qrGenerated = true;
+        qrRendered = true;
       }
 
-      getInitialTimestamp();
+      fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`)
+        .then(r => r.json())
+        .then(d => baselineTimestamp = d.last_trigger_at);
 
+      // Start 60-second QR Auto-Expire Timer
       let remaining = 60;
       document.getElementById("qrTimeLeft").innerText = remaining;
       clearInterval(qrTimer);
       qrTimer = setInterval(() => {
         remaining--;
         document.getElementById("qrTimeLeft").innerText = remaining;
-        if (remaining <= 0) endSession("CANCEL");
+        if (remaining <= 0) {
+          resetStandby("EXPIRED");
+        }
       }, 1000);
 
       clearInterval(pollInterval);
-      pollInterval = setInterval(checkStationStatus, 1500);
+      pollInterval = setInterval(checkScanStatus, 1500);
     }
 
-    async function getInitialTimestamp() {
+    async function checkScanStatus() {
       try {
         const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
-        if (res.ok) {
-          const data = await res.json();
-          baselineTimestamp = data.last_trigger_at;
+        if (!res.ok) return;
+        const d = await res.json();
+
+        // 1. In QR view -> player scanned -> Stop QR timer & start quiz
+        if (currentScreen === "qrView" && d.status === "ACTIVE" && d.visitor_name && d.last_trigger_at !== baselineTimestamp) {
+          clearInterval(qrTimer);
+          activePlayerName = d.visitor_name;
+          startQuiz();
+          return;
+        }
+
+        // 2. In Active Quiz view -> staff clicked "Close" (Status became IDLE) -> Force reset to standby
+        if (currentScreen === "activeView" && d.status === "IDLE") {
+          clearInterval(pollInterval);
+          clearInterval(qrTimer);
+          clearTimeout(nextQuestionTimeout);
+          showSection("standbyView");
         }
       } catch (e) {}
     }
 
-    async function checkStationStatus() {
-      try {
-        const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        
-        if (data.status === "ACTIVE" && data.visitor_name && data.last_trigger_at !== baselineTimestamp) {
-          clearInterval(pollInterval);
-          clearInterval(qrTimer);
-          startGame(data.visitor_name);
-        }
-      } catch (err) {}
-    }
-
-    function startGame(name) {
+    function startQuiz() {
+      currentIndex = 0;
+      correctCount = 0;
       showSection("activeView");
-      document.getElementById("playerName").innerText = name;
-
-      let remaining = 45;
-      document.getElementById("gameTimeLeft").innerText = remaining;
-      clearInterval(gameTimer);
-      gameTimer = setInterval(() => {
-        remaining--;
-        document.getElementById("gameTimeLeft").innerText = remaining;
-        if (remaining <= 0) {
-          endSession("TIMEOUT");
-        }
-      }, 1000);
+      renderQuestion();
     }
 
-    async function submitAnswer(option) {
-      clearInterval(gameTimer);
+    function renderQuestion() {
+      isAnsweringLocked = false;
+      const q = questions[currentIndex];
+      document.getElementById("qProgress").innerText = `Question ${currentIndex + 1} of ${questions.length}`;
+      document.getElementById("qScenario").innerText = q.scenario;
+      document.getElementById("qText").innerText = q.question;
+
+      const container = document.getElementById("optionsContainer");
+      container.innerHTML = "";
+
+      Object.entries(q.options).forEach(([key, val]) => {
+        const btn = document.createElement("button");
+        btn.className = "opt-btn";
+        btn.dataset.key = key;
+        btn.innerHTML = `<strong>${key}.</strong> ${val}`;
+        btn.onclick = () => selectOption(key, btn);
+        container.appendChild(btn);
+      });
+    }
+
+    function selectOption(selectedKey, clickedBtn) {
+      if (isAnsweringLocked) return;
+      isAnsweringLocked = true;
+
+      const currentQ = questions[currentIndex];
+      const isCorrect = (selectedKey === currentQ.correct);
+
+      if (isCorrect) {
+        clickedBtn.classList.add("correct");
+        correctCount += 1;
+      } else {
+        clickedBtn.classList.add("wrong");
+        document.querySelectorAll(".opt-btn").forEach(btn => {
+          if (btn.dataset.key === currentQ.correct) {
+            btn.classList.add("correct");
+          }
+        });
+      }
+
+      nextQuestionTimeout = setTimeout(() => {
+        currentIndex++;
+        if (currentIndex < questions.length) {
+          renderQuestion();
+        } else {
+          finishQuiz();
+        }
+      }, 1200);
+    }
+
+    async function finishQuiz() {
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
+      showSection("resultView");
+      const totalScore = correctCount * 50;
+
+      document.getElementById("resPlayer").innerText = activePlayerName;
+      document.getElementById("resScore").innerText = `+${totalScore} pts`;
+      document.getElementById("resBreakdown").innerText = `${correctCount} of ${questions.length} correct answers`;
 
       try {
-        const res = await fetch(`${API_BASE}/station-submit`, {
+        await fetch(`${API_BASE}/station-submit`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             station_id: STATION_ID,
-            selected_option: option
+            correct_count: correctCount,
+            total_questions: questions.length
           })
         });
-        const data = await res.json();
-
-        showSection("resultView");
-        const box = document.getElementById("resultBox");
-
-        if (data.is_correct) {
-          box.className = "result-box correct";
-          box.innerText = `Correct! (${data.correct_option}) +${data.score_awarded} Points`;
-        } else {
-          box.className = "result-box incorrect";
-          box.innerText = `Incorrect! Correct answer was ${data.correct_option}`;
-        }
-      } catch (e) {
-        showSection("resultView");
-        document.getElementById("resultBox").innerText = "Completed session.";
-      }
+      } catch (e) {}
 
       setTimeout(() => {
         showSection("standbyView");
-      }, 4000);
+      }, 5000);
     }
 
-    async function endSession(reason) {
+    function resetStandby(reason = "CANCEL") {
       clearInterval(pollInterval);
       clearInterval(qrTimer);
-      clearInterval(gameTimer);
-
-      await fetch(`${API_BASE}/station-reset`, {
+      clearTimeout(nextQuestionTimeout);
+      fetch(`${API_BASE}/station-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ station_id: STATION_ID, reason: reason })
@@ -293,8 +304,9 @@
     }
 
     function showSection(id) {
-      ["standbyView", "qrView", "activeView", "resultView"].forEach(sec => {
-        document.getElementById(sec).classList.toggle("hidden", sec !== id);
+      currentScreen = id;
+      ["standbyView", "qrView", "activeView", "resultView"].forEach(s => {
+        document.getElementById(s).classList.toggle("hidden", s !== id);
       });
     }
   </script>

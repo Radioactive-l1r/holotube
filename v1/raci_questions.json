@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "scenario": "A new regulatory reporting framework must be submitted to the authorities by end of quarter.",
+    "question": "Who holds the final veto and is ultimately answerable for the correct and on-time delivery?",
+    "options": {
+      "A": "Responsible",
+      "B": "Accountable",
+      "C": "Consulted",
+      "D": "Informed"
+    },
+    "correct": "B"
+  },
+  {
+    "id": 2,
+    "scenario": "A front-office associate identifies an unusual spike in third-party vendor transactions.",
+    "question": "What is the primary RACI role of the compliance officer who must provide guidance on anti-bribery policies?",
+    "options": {
+      "A": "Responsible",
+      "B": "Accountable",
+      "C": "Consulted",
+      "D": "Informed"
+    },
+    "correct": "C"
+  },
+  {
+    "id": 3,
+    "scenario": "The internal audit department publishes the quarterly audit findings report.",
+    "question": "What is the role of department managers whose teams were reviewed but require no remediation actions?",
+    "options": {
+      "A": "Responsible",
+      "B": "Accountable",
+      "C": "Consulted",
+      "D": "Informed"
+    },
+    "correct": "D"
+  },
+  {
+    "id": 4,
+    "scenario": "IT security is rolling out mandatory multi-factor authentication across the enterprise.",
+    "question": "Which role belongs to the systems engineer executing the actual configuration and deployments?",
+    "options": {
+      "A": "Responsible",
+      "B": "Accountable",
+      "C": "Consulted",
+      "D": "Informed"
+    },
+    "correct": "A"
+  },
+  {
+    "id": 5,
+    "scenario": "A material breach is detected that requires prompt escalation to the board and legal counsel.",
+    "question": "Only ONE individual can hold this role to prevent diluted ownership. Which role is it?",
+    "options": {
+      "A": "Responsible",
+      "B": "Accountable",
+      "C": "Consulted",
+      "D": "Informed"
+    },
+    "correct": "B"
+  }
+]

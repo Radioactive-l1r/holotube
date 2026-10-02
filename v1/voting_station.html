@@ -117,11 +117,10 @@
       <button class="reset-btn" onclick="endSession('CANCEL')">Cancel</button>
     </div>
 
-    <!-- VIEW 3: ACTIVE VOTING -->
+    <!-- VIEW 3: ACTIVE VOTING (No ticking timer) -->
     <div id="activeView" class="hidden">
       <div class="greeting">Welcome, <span id="playerName"></span>!</div>
       <p style="color:#94a3b8;">Cast your vote for the core value that represents our culture best:</p>
-      <div class="timer-badge" style="margin-top:10px;">Time Remaining: <span id="gameTimeLeft">45</span>s</div>
 
       <div class="values-grid">
         <div class="val-card" onclick="castVote('Transparency')">
@@ -156,9 +155,9 @@
     const STATION_ID = "station_voting";
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
     
+    let currentScreen = "standbyView";
     let pollInterval = null;
     let qrTimer = null;
-    let gameTimer = null;
     let baselineTimestamp = null;
     let qrGenerated = false;
 
@@ -185,7 +184,7 @@
       qrTimer = setInterval(() => {
         remaining--;
         document.getElementById("qrTimeLeft").innerText = remaining;
-        if (remaining <= 0) endSession("CANCEL");
+        if (remaining <= 0) endSession("EXPIRED");
       }, 1000);
 
       clearInterval(pollInterval);
@@ -207,11 +206,19 @@
         const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
         if (!res.ok) return;
         const data = await res.json();
-        
-        if (data.status === "ACTIVE" && data.visitor_name && data.last_trigger_at !== baselineTimestamp) {
-          clearInterval(pollInterval);
+
+        // 1. Waiting at QR screen -> Player scanned -> Switch to Active Voting
+        if (currentScreen === "qrView" && data.status === "ACTIVE" && data.visitor_name && data.last_trigger_at !== baselineTimestamp) {
           clearInterval(qrTimer);
           startVoting(data.visitor_name);
+          return;
+        }
+
+        // 2. Active voting screen -> Remote staff clicked "Close" -> Reset to Standby
+        if (currentScreen === "activeView" && data.status === "IDLE") {
+          clearInterval(pollInterval);
+          clearInterval(qrTimer);
+          showSection("standbyView");
         }
       } catch (err) {}
     }
@@ -219,21 +226,11 @@
     function startVoting(name) {
       showSection("activeView");
       document.getElementById("playerName").innerText = name;
-
-      let remaining = 45;
-      document.getElementById("gameTimeLeft").innerText = remaining;
-      clearInterval(gameTimer);
-      gameTimer = setInterval(() => {
-        remaining--;
-        document.getElementById("gameTimeLeft").innerText = remaining;
-        if (remaining <= 0) {
-          endSession("TIMEOUT");
-        }
-      }, 1000);
     }
 
     async function castVote(valueName) {
-      clearInterval(gameTimer);
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
 
       try {
         const res = await fetch(`${API_BASE}/station-vote`, {
@@ -264,7 +261,6 @@
     async function endSession(reason) {
       clearInterval(pollInterval);
       clearInterval(qrTimer);
-      clearInterval(gameTimer);
 
       await fetch(`${API_BASE}/station-reset`, {
         method: "POST",
@@ -275,6 +271,7 @@
     }
 
     function showSection(id) {
+      currentScreen = id;
       ["standbyView", "qrView", "activeView", "resultView"].forEach(sec => {
         document.getElementById(sec).classList.toggle("hidden", sec !== id);
       });

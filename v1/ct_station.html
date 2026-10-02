@@ -45,6 +45,17 @@
     .primary-btn:hover { background: #047857; }
     #qrcode { display: inline-block; background: #fff; padding: 14px; border-radius: 10px; margin: 12px 0; }
     
+    .timer-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 16px;
+      background: #1e293b;
+      color: #f59e0b;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
     .values-selector {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -82,7 +93,7 @@
     }
     .char-hint { font-size: 12px; color: #64748b; text-align: right; margin-bottom: 16px; }
 
-    /* APPROVED COMMITMENT FEED (For Unity Team reference) */
+    /* APPROVED COMMITMENT FEED */
     .feed-container {
       width: 100%;
       max-width: 760px;
@@ -126,7 +137,6 @@
 </head>
 <body>
 
-  <!-- KIOSK STATION PANEL -->
   <div class="container">
     <div id="standbyView">
       <h1>Commitment Tree Station</h1>
@@ -138,8 +148,10 @@
       <h1>Scan with Visitor Pass</h1>
       <p class="subtitle">Pair to write your commitment pledge</p>
       <div id="qrcode"></div>
+      <br />
+      <div class="timer-badge">Session expires in: <span id="qrTimeLeft">60</span>s</div>
       <br /><br />
-      <button class="primary-btn" style="background:#334155;" onclick="resetStandby()">Cancel</button>
+      <button class="primary-btn" style="background:#334155;" onclick="resetStandby('CANCEL')">Cancel</button>
     </div>
 
     <div id="activeView" class="hidden">
@@ -165,7 +177,6 @@
     </div>
   </div>
 
-  <!-- LIVE APPROVED TREE FEED -->
   <div class="feed-container">
     <div class="feed-header">🌳 Live Approved Commitments (Tree Leaves)</div>
     <div class="feed-grid" id="commitmentsFeed">
@@ -177,8 +188,10 @@
     const STATION_ID = "station_commitment";
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
 
+    let currentScreen = "standbyView";
     let selectedValue = "Transparency";
     let pollInterval = null;
+    let qrTimer = null;
     let baselineTimestamp = null;
     let qrRendered = false;
 
@@ -206,6 +219,18 @@
         .then(r => r.json())
         .then(d => baselineTimestamp = d.last_trigger_at);
 
+      // Start 60-second QR Auto-Expire Timer
+      let remaining = 60;
+      document.getElementById("qrTimeLeft").innerText = remaining;
+      clearInterval(qrTimer);
+      qrTimer = setInterval(() => {
+        remaining--;
+        document.getElementById("qrTimeLeft").innerText = remaining;
+        if (remaining <= 0) {
+          resetStandby("EXPIRED");
+        }
+      }, 1000);
+
       clearInterval(pollInterval);
       pollInterval = setInterval(checkScanStatus, 1500);
     }
@@ -215,10 +240,21 @@
         const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
         if (!res.ok) return;
         const d = await res.json();
-        if (d.status === "ACTIVE" && d.visitor_name && d.last_trigger_at !== baselineTimestamp) {
-          clearInterval(pollInterval);
+
+        // 1. In QR View -> User scans on mobile -> Stop QR timer & start session
+        if (currentScreen === "qrView" && d.status === "ACTIVE" && d.visitor_name && d.last_trigger_at !== baselineTimestamp) {
+          clearInterval(qrTimer);
           document.getElementById("playerName").innerText = d.visitor_name;
           showSection("activeView");
+          return;
+        }
+
+        // 2. In Active View -> Staff clicks "Close" (Status became IDLE) -> Force reset
+        if (currentScreen === "activeView" && d.status === "IDLE") {
+          clearInterval(pollInterval);
+          clearInterval(qrTimer);
+          document.getElementById("pledgeInput").value = "";
+          showSection("standbyView");
         }
       } catch (e) {}
     }
@@ -226,6 +262,9 @@
     async function submitCommitment() {
       const text = document.getElementById("pledgeInput").value.trim();
       if (!text) return alert("Please enter your commitment.");
+
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
 
       await fetch(`${API_BASE}/commitment-submit`, {
         method: "POST",
@@ -244,23 +283,24 @@
       }, 3500);
     }
 
-    function resetStandby() {
+    function resetStandby(reason = "CANCEL") {
       clearInterval(pollInterval);
+      clearInterval(qrTimer);
       fetch(`${API_BASE}/station-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ station_id: STATION_ID, reason: "CANCEL" })
+        body: JSON.stringify({ station_id: STATION_ID, reason: reason })
       });
       showSection("standbyView");
     }
 
     function showSection(id) {
+      currentScreen = id;
       ["standbyView", "qrView", "activeView", "resultView"].forEach(s => {
         document.getElementById(s).classList.toggle("hidden", s !== id);
       });
     }
 
-    // Load Public Tree Feed
     async function loadTreeFeed() {
       try {
         const res = await fetch(`${API_BASE}/commitment-feed`);
