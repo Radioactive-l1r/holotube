@@ -87,8 +87,25 @@
     .sum-subhead { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
     .sum-text-highlight { font-size: 14px; font-weight: 600; color: #a855f7; }
     .sum-pledge-quote { font-size: 13px; font-style: italic; color: #cbd5e1; line-height: 1.4; background: #12141a; padding: 10px; border-radius: 8px; border-left: 3px solid #10b981; }
-    .sum-img-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; margin-top: 4px; border: 1px solid #282d3d; }
-    .raffle-pill {
+    .sum-img-wrapper {
+      width: 100%;
+      height: 180px;
+      overflow: hidden;
+      border-radius: 8px;
+      margin-top: 4px;
+      border: 1px solid #282d3d;
+      background: #12141a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .sum-img-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+      .raffle-pill {
       display: inline-block;
       background: #252936;
       color: #cbd5e1;
@@ -195,10 +212,13 @@
       </div>
 
       <!-- AR Tryon Result -->
-      <div class="summary-section">
-        <div class="sum-subhead">AR Try-On Snapshot</div>
-        <img id="sumTryonImg" src="" alt="AR Tryon" class="sum-img-preview" />
+      <!-- AR Tryon Result -->
+    <div class="summary-section">
+      <div class="sum-subhead">AR Try-On Snapshot</div>
+      <div class="sum-img-wrapper">
+        <img id="sumTryonImg" src="" alt="AR Tryon" class="sum-img-preview" crossorigin="anonymous" />
       </div>
+    </div>
 
       <!-- Raffle Draw Placeholder -->
       <div class="summary-section">
@@ -436,7 +456,7 @@
       document.getElementById("summaryModal").classList.add("hidden");
     }
 
-    async function shareSummaryImage() {
+ async function shareSummaryImage() {
       const shareBtn = document.getElementById("shareBtn");
       const cardElement = document.querySelector("#summaryModal .summary-card");
 
@@ -444,18 +464,26 @@
       shareBtn.innerText = "Generating...";
 
       try {
-        // Render card to canvas (temporarily hide modal buttons during screenshot)
         shareBtn.parentElement.style.visibility = "hidden";
 
         const canvas = await html2canvas(cardElement, {
           backgroundColor: "#1a1d26",
-          scale: 2, // High resolution (Retina quality)
-          useCORS: true // Allows cross-origin images like AR Tryon snapshot to render
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          onclone: (clonedDoc) => {
+            // Force the cloned image to match its computed aspect ratio
+            const clonedImg = clonedDoc.getElementById("sumTryonImg");
+            if (clonedImg) {
+              clonedImg.style.objectFit = "cover";
+              clonedImg.style.width = "100%";
+              clonedImg.style.height = "100%";
+            }
+          }
         });
 
         shareBtn.parentElement.style.visibility = "visible";
 
-        // Convert canvas to Blob
         canvas.toBlob(async (blob) => {
           if (!blob) throw new Error("Canvas render failed");
 
@@ -463,15 +491,13 @@
             type: "image/png"
           });
 
-          // Check if Web Share API supports sharing files (Mobile Safari / Chrome)
           if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
               title: "My Event Journey Summary",
-              text: `Check out my journey summary and RACI score at the event!`,
+              text: `Check out my journey summary and RACI score!`,
               files: [file]
             });
           } else {
-            // Desktop fallback: Auto-download the image file
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
             a.download = `${currentUser.name.replace(/\s+/g, "_")}_Journey.png`;
