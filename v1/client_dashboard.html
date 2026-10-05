@@ -25,6 +25,46 @@
       max-width: 900px;
     }
 
+    /* TOP BAR WITH EXPORT */
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .dashboard-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0e2023;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .btn-export {
+      background-color: #0d9488;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background-color 0.2s;
+    }
+
+    .btn-export:hover {
+      background-color: #0b7c71;
+    }
+
+    .btn-export:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+    }
+
     /* TOP STAT CARDS */
     .stats-row {
       display: grid;
@@ -113,6 +153,10 @@
         padding: 16px;
       }
 
+      .top-header {
+        margin-bottom: 16px;
+      }
+
       .stats-row {
         grid-template-columns: repeat(2, 1fr);
         gap: 12px;
@@ -165,6 +209,14 @@
 <body>
 
   <div class="dashboard-container">
+
+    <!-- HEADER WITH EXPORT BUTTON -->
+    <div class="top-header">
+      <div class="dashboard-title">Event Operations</div>
+      <button id="exportBtn" class="btn-export" onclick="exportDataToCSV()">
+        <span>Export CSV</span>
+      </button>
+    </div>
 
     <!-- 4 STAT CARDS (2x2 on mobile) -->
     <div class="stats-row">
@@ -264,6 +316,80 @@
 
       } catch (err) {
         console.error("Dashboard refresh error:", err);
+      }
+    }
+
+    // CSV EXPORT LOGIC
+    async function exportDataToCSV() {
+      const btn = document.getElementById("exportBtn");
+      btn.disabled = true;
+      btn.innerText = "Exporting...";
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/export-data`);
+        if (!res.ok) throw new Error("Failed to fetch export data");
+        const data = await res.json();
+        const visitors = data.visitors || [];
+
+        if (visitors.length === 0) {
+          alert("No visitor data to export yet.");
+          btn.disabled = false;
+          btn.innerText = "Export CSV";
+          return;
+        }
+
+        const headers = [
+          "Full Name",
+          "Phone",
+          "Email",
+          "RACI Score",
+          "RACI Correct (out of 5)",
+          "Voted Core Value",
+          "Commitment Pillar",
+          "Commitment Pledge",
+          "AR Try-On Status",
+          "Registered At"
+        ];
+
+        const escapeCSV = (val) => {
+          if (val === null || val === undefined) return '""';
+          const str = String(val).replace(/"/g, '""');
+          return `"${str}"`;
+        };
+
+        const rows = visitors.map(v => [
+          escapeCSV(v.name),
+          escapeCSV(v.phone),
+          escapeCSV(v.email),
+          escapeCSV(v.raci_score),
+          escapeCSV(v.raci_correct),
+          escapeCSV(v.voted_value),
+          escapeCSV(v.commitment_pillar),
+          escapeCSV(v.pledge_text),
+          escapeCSV(v.tryon_status),
+          escapeCSV(v.registered_at)
+        ].join(","));
+
+        // UTF-8 BOM (\uFEFF) ensures Excel opens text and symbols without encoding errors
+        const csvContent = "\uFEFF" + [headers.map(escapeCSV).join(","), ...rows].join("\r\n");
+
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const timestamp = new Date().toISOString().slice(0, 10);
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", `event_data_export_${timestamp}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+      } catch (err) {
+        alert("Error exporting CSV: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Export CSV";
       }
     }
 
