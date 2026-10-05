@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Visitor Pass</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f1117; color: #f0f0f0; padding: 20px; }
@@ -204,8 +205,15 @@
         <div class="sum-subhead">Raffle Draw Result</div>
         <div class="raffle-pill" id="sumRaffle">Not this time</div>
       </div>
+      <div style="display: flex; gap: 10px; margin-top: 16px;">
+      <button class="action-btn" id="shareBtn" style="margin: 0; background: #059669;" onclick="shareSummaryImage()">
+        📸 Share Summary
+      </button>
+      <button class="action-btn" style="margin: 0; background: #252936; border: 1px solid #33384a; width: 90px;" onclick="closeSummary()">
+        Close
+      </button>
+      </div>
 
-      <button class="action-btn" style="margin-top: 14px;" onclick="closeSummary()">Close Summary</button>
     </div>
   </div>
 
@@ -426,6 +434,61 @@
 
     function closeSummary() {
       document.getElementById("summaryModal").classList.add("hidden");
+    }
+
+    async function shareSummaryImage() {
+      const shareBtn = document.getElementById("shareBtn");
+      const cardElement = document.querySelector("#summaryModal .summary-card");
+
+      shareBtn.disabled = true;
+      shareBtn.innerText = "Generating...";
+
+      try {
+        // Render card to canvas (temporarily hide modal buttons during screenshot)
+        shareBtn.parentElement.style.visibility = "hidden";
+
+        const canvas = await html2canvas(cardElement, {
+          backgroundColor: "#1a1d26",
+          scale: 2, // High resolution (Retina quality)
+          useCORS: true // Allows cross-origin images like AR Tryon snapshot to render
+        });
+
+        shareBtn.parentElement.style.visibility = "visible";
+
+        // Convert canvas to Blob
+        canvas.toBlob(async (blob) => {
+          if (!blob) throw new Error("Canvas render failed");
+
+          const file = new File([blob], `${currentUser.name.replace(/\s+/g, "_")}_Journey.png`, {
+            type: "image/png"
+          });
+
+          // Check if Web Share API supports sharing files (Mobile Safari / Chrome)
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: "My Event Journey Summary",
+              text: `Check out my journey summary and RACI score at the event!`,
+              files: [file]
+            });
+          } else {
+            // Desktop fallback: Auto-download the image file
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `${currentUser.name.replace(/\s+/g, "_")}_Journey.png`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }
+
+          shareBtn.disabled = false;
+          shareBtn.innerText = "📸 Share Summary";
+        }, "image/png");
+
+      } catch (err) {
+        shareBtn.parentElement.style.visibility = "visible";
+        shareBtn.disabled = false;
+        shareBtn.innerText = "📸 Share Summary";
+        alert("Could not share image: " + err.message);
+      }
     }
   </script>
 </body>
