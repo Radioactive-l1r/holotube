@@ -15,7 +15,7 @@
     .tab-btn.active { background: #0070f3; color: #fff; border-color: #0070f3; }
     input { width: 100%; padding: 12px; margin: 8px 0; background: #12141a; border: 1px solid #2d3345; border-radius: 8px; color: #fff; font-size: 15px; }
     button.action-btn { width: 100%; padding: 12px; margin: 12px 0; background: #0070f3; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .key-badge { background: #112233; border: 1px dashed #0070f3; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; }
     .key-badge span { font-size: 22px; letter-spacing: 4px; font-weight: bold; color: #38bdf8; }
 
@@ -44,6 +44,59 @@
     #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 15px; }
     #statusMsg { text-align: center; margin-top: 15px; font-weight: bold; font-size: 14px; line-height: 1.4; }
 
+    /* Summary Modal */
+    .summary-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.88);
+      z-index: 999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .summary-card {
+      background: #1a1d26;
+      border: 1px solid #282f44;
+      border-radius: 16px;
+      width: 100%;
+      max-width: 400px;
+      padding: 22px;
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .summary-header { text-align: center; margin-bottom: 16px; }
+    .summary-metric-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .sum-box {
+      background: #12141a;
+      padding: 12px;
+      border-radius: 10px;
+      text-align: center;
+      border: 1px solid #282d3d;
+    }
+    .sum-label { font-size: 11px; text-transform: uppercase; color: #94a3b8; font-weight: 700; display: block; }
+    .sum-value { font-size: 20px; font-weight: 800; margin-top: 4px; display: block; }
+    .summary-section { margin-bottom: 12px; text-align: left; }
+    .sum-subhead { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+    .sum-text-highlight { font-size: 14px; font-weight: 600; color: #a855f7; }
+    .sum-pledge-quote { font-size: 13px; font-style: italic; color: #cbd5e1; line-height: 1.4; background: #12141a; padding: 10px; border-radius: 8px; border-left: 3px solid #10b981; }
+    .sum-img-preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: 8px; margin-top: 4px; border: 1px solid #282d3d; }
+    .raffle-pill {
+      display: inline-block;
+      background: #252936;
+      color: #cbd5e1;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid #33384a;
+    }
   </style>
 </head>
 <body>
@@ -80,6 +133,7 @@
       <small style="color:#aaa;">Your 6-Digit Passkey</small><br />
       <span id="dashKey">------</span>
     </div>
+    <button id="scanToggleBtn" class="action-btn" onclick="startScanner()">Scan QR</button>
 
     <!-- Station Checklist -->
     <div class="checklist-title">Station Journey (<span id="completedCount">0</span>/4 Complete)</div>
@@ -102,7 +156,6 @@
       </div>
     </div>
 
-    <button id="scanToggleBtn" class="action-btn" onclick="startScanner()">Scan Station QR</button>
     <div id="reader"></div>
     <div id="statusMsg"></div>
 
@@ -110,10 +163,58 @@
     <button class="action-btn" style="background: #33384a; margin-top: 6px;" onclick="handleLogout()">Logout</button>
   </div>
 
+  <!-- Journey Summary Modal / Overlay -->
+  <div id="summaryModal" class="summary-overlay hidden">
+    <div class="summary-card">
+      <div class="summary-header">
+        <h2 style="color: #38bdf8;">🎉 Journey Complete!</h2>
+        <p id="sumVisitorName" style="color: #94a3b8; font-size: 14px; margin-top: 4px;"></p>
+      </div>
+
+      <!-- Leaderboard Rank & RACI Score -->
+      <div class="summary-metric-row">
+        <div class="sum-box">
+          <span class="sum-label">RACI Score</span>
+          <span class="sum-value" id="sumRaciScore" style="color: #38bdf8;">0 pts</span>
+        </div>
+        <div class="sum-box">
+          <span class="sum-label">Event Rank</span>
+          <span class="sum-value" id="sumRank" style="color: #facc15;">#--</span>
+        </div>
+      </div>
+
+      <!-- Value & Pledge -->
+      <div class="summary-section">
+        <div class="sum-subhead">Core Value Voted</div>
+        <div class="sum-text-highlight" id="sumVoteValue">--</div>
+      </div>
+
+      <div class="summary-section">
+        <div class="sum-subhead">Commitment Pledge</div>
+        <div class="sum-pledge-quote" id="sumPledgeText">“--”</div>
+      </div>
+
+      <!-- AR Tryon Result -->
+      <div class="summary-section">
+        <div class="sum-subhead">AR Try-On Snapshot</div>
+        <img id="sumTryonImg" src="" alt="AR Tryon" class="sum-img-preview" />
+      </div>
+
+      <!-- Raffle Draw Placeholder -->
+      <div class="summary-section">
+        <div class="sum-subhead">Raffle Draw Result</div>
+        <div class="raffle-pill" id="sumRaffle">Not this time</div>
+      </div>
+
+      <button class="action-btn" style="margin-top: 14px;" onclick="closeSummary()">Close Summary</button>
+    </div>
+  </div>
+
   <script>
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
     let currentUser = null;
     let html5QrCode = null;
+    let currentCompletedCount = 0;
 
     window.onload = () => {
       const saved = localStorage.getItem("ht_user");
@@ -212,6 +313,7 @@
         updatePill("badge-voting", data.stations.voting);
         updatePill("badge-commitment", data.stations.commitment);
         updatePill("badge-tryon", data.stations.tryon);
+        currentCompletedCount = count;
         document.getElementById("completedCount").innerText = count;
       } catch (err) {}
     }
@@ -226,7 +328,7 @@
       document.getElementById("authSection").classList.remove("hidden");
     }
 
-   function startScanner() {
+    function startScanner() {
       document.getElementById("scanToggleBtn").classList.add("hidden");
       document.getElementById("statusMsg").innerText = "";
       html5QrCode = new Html5Qrcode("reader");
@@ -236,6 +338,29 @@
         { fps: 10, qrbox: 240 },
         async (decodedStationId) => {
           await html5QrCode.stop();
+          const rawCode = decodedStationId.trim();
+
+          // 1. Intercept Journey Summary QR ("visjrn")
+          if (rawCode === "visjrn") {
+            if (currentCompletedCount < 4) {
+              document.getElementById("statusMsg").style.color = "#f87171";
+              document.getElementById("statusMsg").innerText = `Journey incomplete! Finish all 4 stations first (${currentCompletedCount}/4 done).`;
+            } else {
+              document.getElementById("statusMsg").style.color = "#38bdf8";
+              document.getElementById("statusMsg").innerText = "Loading your journey summary...";
+              await loadJourneySummary();
+            }
+
+            setTimeout(() => {
+              document.getElementById("statusMsg").innerText = "";
+            }, 5000);
+
+            document.getElementById("scanToggleBtn").classList.remove("hidden");
+            document.getElementById("scanToggleBtn").innerText = "Scan QR";
+            return;
+          }
+
+          // 2. Normal Station Pairing
           document.getElementById("statusMsg").style.color = "#38bdf8";
           document.getElementById("statusMsg").innerText = "Connecting to station...";
 
@@ -243,13 +368,13 @@
             const res = await fetch(`${API_BASE}/scan`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ token: currentUser.token, station_id: decodedStationId.trim() })
+              body: JSON.stringify({ token: currentUser.token, station_id: rawCode })
             });
             const data = await res.json();
 
             if (res.ok) {
               document.getElementById("statusMsg").style.color = "#4ade80";
-              document.getElementById("statusMsg").innerText = "Connected to " + decodedStationId + "!";
+              document.getElementById("statusMsg").innerText = "Connected to " + rawCode + "!";
               refreshProgress();
             } else {
               throw new Error(data.error || "Scan failed");
@@ -259,7 +384,6 @@
             document.getElementById("statusMsg").innerText = err.message;
           }
 
-          // Auto-hide message after 5 seconds
           setTimeout(() => {
             document.getElementById("statusMsg").innerText = "";
           }, 5000);
@@ -272,6 +396,37 @@
         alert("Camera error: " + err);
         document.getElementById("scanToggleBtn").classList.remove("hidden");
       });
+    }
+
+    async function loadJourneySummary() {
+      try {
+        const res = await fetch(`${API_BASE}/visitor-summary?token=${encodeURIComponent(currentUser.token)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Could not retrieve summary.");
+        }
+
+        document.getElementById("statusMsg").innerText = "";
+
+        // Fill modal fields
+        document.getElementById("sumVisitorName").innerText = data.visitor_name;
+        document.getElementById("sumRaciScore").innerText = `${data.raci.score} pts`;
+        document.getElementById("sumRank").innerText = `#${data.raci.rank}`;
+        document.getElementById("sumVoteValue").innerText = data.voting.voted_value;
+        document.getElementById("sumPledgeText").innerText = `“${data.commitment.pledge_text}”`;
+        document.getElementById("sumTryonImg").src = data.tryon.photo_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
+        document.getElementById("sumRaffle").innerText = data.raffle.result;
+
+        document.getElementById("summaryModal").classList.remove("hidden");
+      } catch (err) {
+        document.getElementById("statusMsg").style.color = "#f87171";
+        document.getElementById("statusMsg").innerText = err.message;
+      }
+    }
+
+    function closeSummary() {
+      document.getElementById("summaryModal").classList.add("hidden");
     }
   </script>
 </body>

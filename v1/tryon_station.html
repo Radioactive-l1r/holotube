@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AR Try-On Station</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0d13;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+      text-align: center;
+    }
+    .kiosk-card {
+      width: 100%;
+      max-width: 680px;
+      background: #151821;
+      border: 1px solid #232838;
+      border-radius: 16px;
+      padding: 36px 28px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    }
+    .hidden { display: none; }
+    h1 { font-size: 28px; color: #ec4899; margin-bottom: 8px; }
+    p.subtitle { color: #94a3b8; font-size: 15px; margin-bottom: 24px; }
+    
+    .primary-btn {
+      background: #db2777;
+      color: #fff;
+      border: none;
+      padding: 12px 28px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .primary-btn:hover { background: #be185d; }
+    #qrcode { display: inline-block; background: #fff; padding: 14px; border-radius: 10px; margin: 14px 0; }
+
+    .timer-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 6px 16px;
+      background: #1e293b;
+      color: #f59e0b;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .image-preview-container {
+      margin: 20px auto;
+      max-width: 380px;
+      background: #0f1117;
+      border: 2px dashed #334155;
+      border-radius: 12px;
+      padding: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .preview-img {
+      width: 100%;
+      height: auto;
+      max-height: 380px;
+      object-fit: cover;
+      border-radius: 8px;
+    }
+
+    .reset-btn {
+      background: #334155;
+      color: #cbd5e1;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="kiosk-card">
+    
+    <!-- STANDBY -->
+    <div id="standbyView">
+      <h1>AR Try-On Station</h1>
+      <p class="subtitle">Experience the digital avatar & wearable preview</p>
+      <button class="primary-btn" onclick="openSession()">Start / Show QR</button>
+    </div>
+
+    <!-- QR CODE SCAN -->
+    <div id="qrView" class="hidden">
+      <h1>Scan with Visitor Pass</h1>
+      <p class="subtitle">Scan to initiate your AR photo preview</p>
+      <div id="qrcode"></div>
+      <br />
+      <div class="timer-badge">Session expires in: <span id="qrTimeLeft">60</span>s</div>
+      <br /><br />
+      <button class="reset-btn" onclick="resetStandby('CANCEL')">Cancel</button>
+    </div>
+
+    <!-- ACTIVE VIEW (Loads Single Image) -->
+    <div id="activeView" class="hidden">
+      <h1>Welcome, <span id="playerName" style="color:#f472b6;"></span>!</h1>
+      <p class="subtitle">Your AR Try-On preview is generated below:</p>
+
+      <div class="image-preview-container">
+        <!-- Sample image placeholder: can be replaced with real image or generated output -->
+        <img id="tryonImage" class="preview-img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80" alt="AR Preview" />
+      </div>
+
+      <button class="primary-btn" onclick="completeTryOn()">Complete & Finish</button>
+    </div>
+
+    <!-- RESULT CONFIRMATION -->
+    <div id="resultView" class="hidden">
+      <h2 style="color:#4ade80; margin-bottom:8px;">Try-On Recorded!</h2>
+      <p style="color:#94a3b8; font-size:14px;">Your journey checklist has been updated.</p>
+    </div>
+
+  </div>
+
+  <script>
+    const STATION_ID = "station_tryon";
+    const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
+
+    let currentScreen = "standbyView";
+    let pollInterval = null;
+    let qrTimer = null;
+    let baselineTimestamp = null;
+    let qrRendered = false;
+
+    function openSession() {
+      showSection("qrView");
+
+      if (!qrRendered) {
+        new QRCode(document.getElementById("qrcode"), {
+          text: STATION_ID,
+          width: 180,
+          height: 180,
+          colorDark: "#000",
+          colorLight: "#fff"
+        });
+        qrRendered = true;
+      }
+
+      fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`)
+        .then(r => r.json())
+        .then(d => baselineTimestamp = d.last_trigger_at);
+
+      let remaining = 60;
+      document.getElementById("qrTimeLeft").innerText = remaining;
+      clearInterval(qrTimer);
+      qrTimer = setInterval(() => {
+        remaining--;
+        document.getElementById("qrTimeLeft").innerText = remaining;
+        if (remaining <= 0) resetStandby("EXPIRED");
+      }, 1000);
+
+      clearInterval(pollInterval);
+      pollInterval = setInterval(checkScanStatus, 1500);
+    }
+
+    async function checkScanStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/station-status?station_id=${STATION_ID}`);
+        if (!res.ok) return;
+        const d = await res.json();
+
+        // 1. In QR View -> User scans on mobile -> Switch to active image preview
+        if (currentScreen === "qrView" && d.status === "ACTIVE" && d.visitor_name && d.last_trigger_at !== baselineTimestamp) {
+          clearInterval(qrTimer);
+          document.getElementById("playerName").innerText = d.visitor_name;
+          showSection("activeView");
+          return;
+        }
+
+        // 2. In Active View -> Staff clicks "Close" (Status became IDLE) -> Force reset
+        if (currentScreen === "activeView" && d.status === "IDLE") {
+          clearInterval(pollInterval);
+          clearInterval(qrTimer);
+          showSection("standbyView");
+        }
+      } catch (e) {}
+    }
+
+    async function completeTryOn() {
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
+
+      const imageUrl = document.getElementById("tryonImage").src;
+
+      try {
+        await fetch(`${API_BASE}/tryon-complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            station_id: STATION_ID,
+            image_url: imageUrl
+          })
+        });
+      } catch (e) {}
+
+      showSection("resultView");
+      setTimeout(() => {
+        showSection("standbyView");
+      }, 3500);
+    }
+
+    function resetStandby(reason = "CANCEL") {
+      clearInterval(pollInterval);
+      clearInterval(qrTimer);
+      fetch(`${API_BASE}/station-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ station_id: STATION_ID, reason: reason })
+      });
+      showSection("standbyView");
+    }
+
+    function showSection(id) {
+      currentScreen = id;
+      ["standbyView", "qrView", "activeView", "resultView"].forEach(s => {
+        document.getElementById(s).classList.toggle("hidden", s !== id);
+      });
+    }
+  </script>
+</body>
+</html>
