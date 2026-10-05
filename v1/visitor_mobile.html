@@ -138,7 +138,11 @@
   <!-- DASHBOARD SECTION -->
   <div id="dashSection" class="card hidden">
     <h3>Visitor Passport</h3>
-    <p style="text-align:center; color:#888;">Welcome, <span id="dashName" style="color:#fff; font-weight:bold;"></span></p>
+    
+    <div style="text-align: center; margin: 10px 0 16px;">
+      <div style="color: #94a3b8; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Welcome</div>
+      <div id="dashName" style="color: #fff; font-size: 26px; font-weight: 800; margin-top: 4px; letter-spacing: 0.5px;"></div>
+    </div>
     
     <div class="key-badge">
       <small style="color:#aaa;">Your 6-Digit Passkey</small><br />
@@ -171,6 +175,12 @@
     <div id="statusMsg"></div>
 
     <button class="action-btn" style="background: #252936; margin-top: 14px;" onclick="refreshProgress()">Refresh Journey</button>
+    
+    <!-- OPEN SUMMARY BUTTON (Visible only when 4/4 complete) -->
+    <button id="openSummaryBtn" class="action-btn hidden" style="background: #059669; margin-top: 6px;" onclick="loadJourneySummary()">
+      🎉 Open Journey Summary
+    </button>
+
     <button class="action-btn" style="background: #33384a; margin-top: 6px;" onclick="handleLogout()">Logout</button>
   </div>
 
@@ -232,7 +242,6 @@
     const API_BASE = "https://lby0uv2u5g.execute-api.us-east-1.amazonaws.com/default";
     let currentUser = null;
     let html5QrCode = null;
-    let currentCompletedCount = 0;
 
     window.onload = () => {
       const saved = localStorage.getItem("ht_user");
@@ -331,8 +340,18 @@
         updatePill("badge-voting", data.stations.voting);
         updatePill("badge-commitment", data.stations.commitment);
         updatePill("badge-tryon", data.stations.tryon);
-        currentCompletedCount = count;
+        
         document.getElementById("completedCount").innerText = count;
+
+        // Toggle OPEN SUMMARY button when 4/4 complete
+        const summaryBtn = document.getElementById("openSummaryBtn");
+        if (summaryBtn) {
+          if (count >= 4) {
+            summaryBtn.classList.remove("hidden");
+          } else {
+            summaryBtn.classList.add("hidden");
+          }
+        }
       } catch (err) {}
     }
 
@@ -357,25 +376,6 @@
         async (decodedStationId) => {
           await html5QrCode.stop();
           const rawCode = decodedStationId.trim();
-
-          if (rawCode === "visjrn") {
-            if (currentCompletedCount < 4) {
-              document.getElementById("statusMsg").style.color = "#f87171";
-              document.getElementById("statusMsg").innerText = `Journey incomplete! Finish all 4 stations first (${currentCompletedCount}/4 done).`;
-            } else {
-              document.getElementById("statusMsg").style.color = "#00c1a7";
-              document.getElementById("statusMsg").innerText = "Loading your journey summary...";
-              await loadJourneySummary();
-            }
-
-            setTimeout(() => {
-              document.getElementById("statusMsg").innerText = "";
-            }, 5000);
-
-            document.getElementById("scanToggleBtn").classList.remove("hidden");
-            document.getElementById("scanToggleBtn").innerText = "Scan QR";
-            return;
-          }
 
           document.getElementById("statusMsg").style.color = "#00c1a7";
           document.getElementById("statusMsg").innerText = "Connecting to station...";
