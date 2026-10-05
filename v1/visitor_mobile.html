@@ -90,22 +90,15 @@
     .sum-img-wrapper {
       width: 100%;
       height: 180px;
-      overflow: hidden;
       border-radius: 8px;
       margin-top: 4px;
       border: 1px solid #282d3d;
-      background: #12141a;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      background-color: #12141a;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
-    .sum-img-preview {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-      .raffle-pill {
+    .raffle-pill {
       display: inline-block;
       background: #252936;
       color: #cbd5e1;
@@ -186,7 +179,8 @@
     <div class="summary-card">
       <div class="summary-header">
         <h2 style="color: #00c1a7;">🎉 Journey Complete!</h2>
-      <div id="sumVisitorName" style="color: #FFFF; font-size: 20px; font-weight: 700; margin-top: 4px;"></div>      </div>
+        <div id="sumVisitorName" style="color: #fff; font-size: 20px; font-weight: 700; margin-top: 4px;"></div>
+      </div>
 
       <!-- Leaderboard Rank & RACI Score -->
       <div class="summary-metric-row">
@@ -212,28 +206,25 @@
       </div>
 
       <!-- AR Tryon Result -->
-      <!-- AR Tryon Result -->
-    <div class="summary-section">
-      <div class="sum-subhead">AR Try-On Snapshot</div>
-      <div class="sum-img-wrapper">
-        <img id="sumTryonImg" src="" alt="AR Tryon" class="sum-img-preview" crossorigin="anonymous" />
+      <div class="summary-section">
+        <div class="sum-subhead">AR Try-On Snapshot</div>
+        <div class="sum-img-wrapper" id="sumTryonImg"></div>
       </div>
-    </div>
 
       <!-- Raffle Draw Placeholder -->
       <div class="summary-section">
         <div class="sum-subhead">Raffle Draw Result</div>
         <div class="raffle-pill" id="sumRaffle">Not this time</div>
       </div>
-      <div style="display: flex; gap: 10px; margin-top: 16px;">
-      <button class="action-btn" id="shareBtn" style="margin: 0; background: #059669;" onclick="shareSummaryImage()">
-        📸 Share Summary
-      </button>
-      <button class="action-btn" style="margin: 0; background: #252936; border: 1px solid #33384a; width: 90px;" onclick="closeSummary()">
-        Close
-      </button>
-      </div>
 
+      <div style="display: flex; gap: 10px; margin-top: 16px;">
+        <button class="action-btn" id="shareBtn" style="margin: 0; background: #059669;" onclick="shareSummaryImage()">
+          📸 Share Summary
+        </button>
+        <button class="action-btn" style="margin: 0; background: #252936; border: 1px solid #33384a; width: 90px;" onclick="closeSummary()">
+          Close
+        </button>
+      </div>
     </div>
   </div>
 
@@ -367,7 +358,6 @@
           await html5QrCode.stop();
           const rawCode = decodedStationId.trim();
 
-          // 1. Intercept Journey Summary QR ("visjrn")
           if (rawCode === "visjrn") {
             if (currentCompletedCount < 4) {
               document.getElementById("statusMsg").style.color = "#f87171";
@@ -387,7 +377,6 @@
             return;
           }
 
-          // 2. Normal Station Pairing
           document.getElementById("statusMsg").style.color = "#00c1a7";
           document.getElementById("statusMsg").innerText = "Connecting to station...";
 
@@ -436,13 +425,16 @@
 
         document.getElementById("statusMsg").innerText = "";
 
-        // Fill modal fields
         document.getElementById("sumVisitorName").innerText = data.visitor_name;
         document.getElementById("sumRaciScore").innerText = `${data.raci.score} pts`;
         document.getElementById("sumRank").innerText = `#${data.raci.rank}`;
         document.getElementById("sumVoteValue").innerText = data.voting.voted_value;
         document.getElementById("sumPledgeText").innerText = `“${data.commitment.pledge_text}”`;
-        document.getElementById("sumTryonImg").src = data.tryon.photo_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
+        
+        const fallbackImg = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80";
+        const photoUrl = data.tryon.photo_url || fallbackImg;
+        document.getElementById("sumTryonImg").style.backgroundImage = `url("${photoUrl}")`;
+        
         document.getElementById("sumRaffle").innerText = data.raffle.result;
 
         document.getElementById("summaryModal").classList.remove("hidden");
@@ -456,7 +448,7 @@
       document.getElementById("summaryModal").classList.add("hidden");
     }
 
- async function shareSummaryImage() {
+    async function shareSummaryImage() {
       const shareBtn = document.getElementById("shareBtn");
       const cardElement = document.querySelector("#summaryModal .summary-card");
 
@@ -470,16 +462,7 @@
           backgroundColor: "#1a1d26",
           scale: 2,
           useCORS: true,
-          allowTaint: false,
-          onclone: (clonedDoc) => {
-            // Force the cloned image to match its computed aspect ratio
-            const clonedImg = clonedDoc.getElementById("sumTryonImg");
-            if (clonedImg) {
-              clonedImg.style.objectFit = "cover";
-              clonedImg.style.width = "100%";
-              clonedImg.style.height = "100%";
-            }
-          }
+          allowTaint: false
         });
 
         shareBtn.parentElement.style.visibility = "visible";
