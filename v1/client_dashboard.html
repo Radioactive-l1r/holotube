@@ -320,6 +320,7 @@
     }
 
     // CSV EXPORT LOGIC
+    // CSV EXPORT LOGIC (Clean text, no visible quotes, no scientific notation)
     async function exportDataToCSV() {
       const btn = document.getElementById("exportBtn");
       btn.disabled = true;
@@ -338,12 +339,13 @@
           return;
         }
 
+        // Clean headers without quotes
         const headers = [
           "Full Name",
           "Phone",
           "Email",
           "RACI Score",
-          "RACI Correct (out of 5)",
+          "RACI Correct",
           "Voted Core Value",
           "Commitment Pillar",
           "Commitment Pledge",
@@ -351,27 +353,36 @@
           "Registered At"
         ];
 
-        const escapeCSV = (val) => {
-          if (val === null || val === undefined) return '""';
-          const str = String(val).replace(/"/g, '""');
+        // Format helper:
+        // - Text columns with numbers/symbols (Name, Phone): uses ="value" so Excel renders clean text without quotes
+        // - Freeform text: escapes internal quotes and cleans newlines
+        const formatCell = (val, forceText = false) => {
+          if (val === null || val === undefined) return "";
+          let str = String(val).replace(/\r?\n|\r/g, " ").trim();
+          str = str.replace(/"/g, '""');
+
+          if (forceText && str.length > 0) {
+            return `="${str}"`;
+          }
+
           return `"${str}"`;
         };
 
         const rows = visitors.map(v => [
-          escapeCSV(v.name),
-          escapeCSV(v.phone),
-          escapeCSV(v.email),
-          escapeCSV(v.raci_score),
-          escapeCSV(v.raci_correct),
-          escapeCSV(v.voted_value),
-          escapeCSV(v.commitment_pillar),
-          escapeCSV(v.pledge_text),
-          escapeCSV(v.tryon_status),
-          escapeCSV(v.registered_at)
+          formatCell(v.name, true),            // Forces text (prevents 5.67E+08 if name is numbers)
+          formatCell(v.phone, true),           // Forces text (keeps leading 0s, no scientific notation, no visible quotes)
+          formatCell(v.email),
+          formatCell(v.raci_score),
+          formatCell(v.raci_correct),
+          formatCell(v.voted_value),
+          formatCell(v.commitment_pillar),
+          formatCell(v.pledge_text),
+          formatCell(v.tryon_status),
+          formatCell(v.registered_at, true)
         ].join(","));
 
-        // UTF-8 BOM (\uFEFF) ensures Excel opens text and symbols without encoding errors
-        const csvContent = "\uFEFF" + [headers.map(escapeCSV).join(","), ...rows].join("\r\n");
+        // UTF-8 BOM (\uFEFF)
+        const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
 
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
